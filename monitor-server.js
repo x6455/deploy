@@ -19,130 +19,7 @@ const cors = require('cors');
 
 const PORT = process.env.MONITOR_PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_here';
-const ADMIN_PASSWORD = process.env.ADMIN_PASS;function startBotInstance(instanceId) {
-  const instance = instances.get(instanceId);
-  if (!instance) {
-    throw new Error(`Instance ${instanceId} not found`);
-  }
-
-  // Check if script exists
-  if (!fs.existsSync(instance.scriptPath)) {
-    throw new Error(`Script not found: ${instance.scriptPath}`);
-  }
-
-  // Check if already running
-  if (instance.running && processes.has(instanceId)) {
-    throw new Error(`Instance ${instanceId} is already running`);
-  }
-
-  // Get the actual server IP for VM environment
-  const networkInterfaces = os.networkInterfaces();
-  let serverHost = 'localhost';
-  
-  // Try to find a non-internal IP address
-  Object.keys(networkInterfaces).forEach(interfaceName => {
-    networkInterfaces[interfaceName].forEach(interface => {
-      if (interface.family === 'IPv4' && !interface.internal) {
-        serverHost = interface.address;
-      }
-    });
-  });
-
-  const botProcess = spawn('node', [instance.scriptPath], {
-    cwd: path.dirname(instance.scriptPath),
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: {
-      ...process.env, // This should include Telegram bot token from .env
-      INSTANCE_ID: instanceId,
-      MONITOR_SERVER: `http://${serverHost}:${PORT}`, // Use actual IP
-      AGENT_TOKEN: AGENT_TOKEN,
-      NODE_ENV: process.env.NODE_ENV || 'production'
-    }
-  });
-
-  // Store process reference
-  processes.set(instanceId, botProcess);
-  instance.process = botProcess;
-  instance.running = true;
-
-  // Enhanced logging to see what's happening
-  logger.info(`Started instance ${instanceId} with PID: ${botProcess.pid}`);
-  logger.info(`Script path: ${instance.scriptPath}`);
-  logger.info(`Working directory: ${path.dirname(instance.scriptPath)}`);
-
-  // Handle process output with more detail
-  botProcess.stdout.on('data', (data) => {
-    const message = data.toString().trim();
-    logger.info(`[${instanceId}][STDOUT] ${message}`);
-    
-    instance.logs.push({
-      level: 'info',
-      message: message,
-      timestamp: new Date().toISOString()
-    });
-    
-    if (instance.logs.length > 1000) {
-      instance.logs = instance.logs.slice(-500);
-    }
-    
-    io.emit('logUpdate', { 
-      id: instanceId, 
-      log: { level: 'info', message: message } 
-    });
-  });
-
-  botProcess.stderr.on('data', (data) => {
-    const message = data.toString().trim();
-    logger.error(`[${instanceId}][STDERR] ${message}`);
-    
-    instance.logs.push({
-      level: 'error',
-      message: message,
-      timestamp: new Date().toISOString()
-    });
-    
-    if (instance.logs.length > 1000) {
-      instance.logs = instance.logs.slice(-500);
-    }
-    
-    io.emit('logUpdate', { 
-      id: instanceId, 
-      log: { level: 'error', message: message } 
-    });
-  });
-
-  // Handle process exit with more info
-  botProcess.on('exit', (code, signal) => {
-    const exitMessage = `Process exited with code ${code}` + (signal ? `, signal ${signal}` : '');
-    logger.info(`[${instanceId}] ${exitMessage}`);
-    
-    instance.running = false;
-    instance.process = null;
-    processes.delete(instanceId);
-    
-    instance.logs.push({
-      level: 'info',
-      message: exitMessage,
-      timestamp: new Date().toISOString()
-    });
-    
-    io.emit('instanceUpdate', { id: instanceId, running: false });
-  });
-
-  botProcess.on('error', (error) => {
-    logger.error(`[${instanceId}] Process error: ${error.message}`);
-    
-    instance.running = false;
-    instance.process = null;
-    processes.delete(instanceId);
-    
-    io.emit('instanceUpdate', { id: instanceId, running: false });
-  });
-
-  // Emit status update
-  io.emit('instanceUpdate', { id: instanceId, running: true });
-  return botProcess;
-}
+const ADMIN_PASSWORD = process.env.ADMIN_PASS;
 const ENCRYPTION_KEY = process.env.DB_ENCRYPTION_KEY;
 const AGENT_TOKEN = process.env.AGENT_TOKEN;
 const ALGORITHM = 'aes-256-cbc';
@@ -275,7 +152,6 @@ function restartBotInstance(instanceId) {
     logger.info(`Instance ${instanceId} started (was not running)`);
   }
 }
-
 function startBotInstance(instanceId) {
   const instance = instances.get(instanceId);
   if (!instance) {
@@ -400,6 +276,7 @@ function startBotInstance(instanceId) {
   io.emit('instanceUpdate', { id: instanceId, running: true });
   return botProcess;
 }
+
 function stopBotInstance(instanceId) {
   const instance = instances.get(instanceId);
   if (!instance) {
@@ -447,33 +324,6 @@ function stopBotInstance(instanceId) {
   logger.info(`Stopped instance ${instanceId}`);
 }
 
-VV    stdio: ['pipe', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      INSTANCE_ID: instanceId,
-      MONITOR_SERVER: `http://localhost:${PORT}`,
-      AGENT_TOKEN: AGENT_TOKEN
-    }
-  });
-
-  // Store process reference
-  processes.set(instanceId, botProcess);
-  instance.process = botProcess;
-  instance.running = true;
-
-  // Emit immediate status update
-  io.emit('instanceUpdate', { id: instanceId, running: true });
-  io.emit('metricsUpdate', { 
-    id: instanceId, 
-    metrics: { 
-      ...instance.metrics, 
-      running: true,
-      uptime: 0 
-    } 
-  });
-  logger.info(`Started instance ${instanceId}`);
-
-}
 // Update bot statuses (no longer uses PM2)
 const updateBotStatuses = (callback) => {
   // Simply update running status based on our process tracking
@@ -590,8 +440,6 @@ app.post('/api/login', (req, res) => {
   const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1h' });
   res.json({ token });
 });
-
-
 // Debug endpoint to check instance details
 app.get('/api/debug/instance/:id', authenticateToken, (req, res) => {
   const instance = instances.get(req.params.id);
@@ -918,7 +766,6 @@ process.on('SIGINT', () => {
 });
 
 // Start server
-// Start server
 server.listen(PORT, '0.0.0.0', () => {
   logger.info(`Monitoring server running on port ${PORT}`);
   logger.info(`Bots folder: ${BOTS_FOLDER}`);
@@ -930,10 +777,4 @@ server.listen(PORT, '0.0.0.0', () => {
     logger.info('Initial bot status check completed');
     setInterval(syncInstanceStatus, 1000);
   });
-
 });
-
-
-
-
-
