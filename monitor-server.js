@@ -158,17 +158,17 @@ function startBotInstance(instanceId) {
     throw new Error(`Instance ${instanceId} not found`);
   }
 
-  console.log(`🚀 STARTING BOT: ${instanceId}`);
-  console.log(`📁 Script: ${instance.scriptPath}`);
-  console.log(`📁 Directory: ${path.dirname(instance.scriptPath)}`);
-  console.log(`✅ File exists: ${fs.existsSync(instance.scriptPath)}`);
+  logger.info(`🚀 STARTING BOT: ${instanceId}`);
+  logger.info(`📁 Script: ${instance.scriptPath}`);
+  logger.info(`📁 Directory: ${path.dirname(instance.scriptPath)}`);
+  logger.info(`✅ File exists: ${fs.existsSync(instance.scriptPath)}`);
 
   // Check if we can read the file
   try {
     fs.accessSync(instance.scriptPath, fs.constants.R_OK);
-    console.log(`📖 File is readable: YES`);
+    logger.info(`📖 File is readable: YES`);
   } catch (err) {
-    console.log(`❌ File is readable: NO - ${err.message}`);
+    logger.info(`❌ File is readable: NO - ${err.message}`);
     throw err;
   }
 
@@ -184,7 +184,7 @@ function startBotInstance(instanceId) {
     }
   });
 
-  console.log(`📊 Bot process spawned for ${instanceId}, PID: ${botProcess.pid}`);
+  logger.info(`📊 Bot process spawned for ${instanceId}, PID: ${botProcess.pid}`);
 
   // Store process reference
   processes.set(instanceId, botProcess);
@@ -194,7 +194,7 @@ function startBotInstance(instanceId) {
   // Enhanced stdout handling
   botProcess.stdout.on('data', (data) => {
     const message = data.toString().trim();
-    console.log(`[${instanceId} STDOUT]: ${message}`);
+    logger.info(`[${instanceId} STDOUT]: ${message}`);
     
     // Add to instance logs
     instance.logs.push({
@@ -241,7 +241,7 @@ function startBotInstance(instanceId) {
 
   // Handle process exit
   botProcess.on('exit', (code, signal) => {
-    console.log(`[${instanceId} EXIT]: Code ${code}, Signal ${signal}`);
+    logger.info(`[${instanceId} EXIT]: Code ${code}, Signal ${signal}`);
     
     instance.running = false;
     instance.process = null;
@@ -278,7 +278,7 @@ function startBotInstance(instanceId) {
     });
   });
 
-  console.log(`✅ Started instance ${instanceId}`);
+  logger.info(`✅ Started instance ${instanceId}`);
   return botProcess;
 }
 
@@ -783,5 +783,6 @@ server.listen(PORT, '0.0.0.0', () => {
   });
 
 });
+
 
 
