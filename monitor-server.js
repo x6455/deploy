@@ -756,7 +756,7 @@ process.on('SIGINT', () => {
 
 // Start server
 // Start server
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   logger.info(`Monitoring server running on port ${PORT}`);
   logger.info(`Bots folder: ${BOTS_FOLDER}`);
   logger.info(`Bot list file: ${BOT_LIST_FILE}`);
@@ -767,4 +767,5 @@ server.listen(PORT, () => {
     logger.info('Initial bot status check completed');
     setInterval(syncInstanceStatus, 1000);
   });
+
 });
