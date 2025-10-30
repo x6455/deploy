@@ -169,6 +169,21 @@ function startBotInstance(instanceId) {
   if (instance.running && processes.has(instanceId)) {
     throw new Error(`Instance ${instanceId} is already running`);
   }
+   console.log(`=== STARTING BOT ${instanceId} ===`);
+  console.log(`Script path: ${instance.scriptPath}`);
+  console.log(`Directory: ${path.dirname(instance.scriptPath)}`);
+  console.log(`File exists: ${fs.existsSync(instance.scriptPath)}`);
+
+  try {
+    fs.accessSync(instance.scriptPath, fs.constants.R_OK);
+    console.log(`File is readable: YES`);
+  } catch (err) {
+    console.log(`File is readable: NO - ${err.message}`);
+  }
+
+  // Debug environment
+  console.log(`BOT_TOKEN available: ${!!process.env.BOT_TOKEN}`);
+  console.log(`Current directory: ${process.cwd()}`);
 
   const botProcess = spawn('node', [instance.scriptPath], {
     cwd: path.dirname(instance.scriptPath),
@@ -232,6 +247,7 @@ function startBotInstance(instanceId) {
       log: { level: 'error', message: message } 
     });
   });
+ 
 
   // Handle process exit
   botProcess.on('exit', (code, signal) => {
@@ -769,3 +785,4 @@ server.listen(PORT, '0.0.0.0', () => {
   });
 
 });
+
