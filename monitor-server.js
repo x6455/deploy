@@ -329,25 +329,7 @@ function stopBotInstance(instanceId) {
   logger.info(`Stopped instance ${instanceId}`);
 }
 
-function startBotInstance(instanceId) {
-  const instance = instances.get(instanceId);
-  if (!instance) {
-    throw new Error(`Instance ${instanceId} not found`);
-  }
-
-  // Check if script exists
-  if (!fs.existsSync(instance.scriptPath)) {
-    throw new Error(`Script not found: ${instance.scriptPath}`);
-  }
-
-  // Check if already running
-  if (instance.running && processes.has(instanceId)) {
-    throw new Error(`Instance ${instanceId} is already running`);
-  }
-
-  const botProcess = spawn('node', [instance.scriptPath], {
-    cwd: path.dirname(instance.scriptPath),
-    stdio: ['pipe', 'pipe', 'pipe'],
+VV    stdio: ['pipe', 'pipe', 'pipe'],
     env: {
       ...process.env,
       INSTANCE_ID: instanceId,
@@ -783,6 +765,7 @@ server.listen(PORT, '0.0.0.0', () => {
   });
 
 });
+
 
 
 
