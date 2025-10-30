@@ -1,0 +1,22 @@
+{
+  "bots": [
+    {
+      "id": "school-bot-1",
+      "folder": "bot1",
+      "script": "index.js",
+      "db": "data.db"
+    },
+    {
+      "id": "school-bot-2", 
+      "folder": "bot2",
+      "script": "index.js",
+      "db": "data.db"
+    },
+	 {
+      "id": "school-bot-3", 
+      "folder": "bot3",
+      "script": "index.js",
+      "db": "data.db"
+    }
+  ]
+}
