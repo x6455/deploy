@@ -152,38 +152,25 @@ function restartBotInstance(instanceId) {
     logger.info(`Instance ${instanceId} started (was not running)`);
   }
 }
-
-// New process management functions
 function startBotInstance(instanceId) {
   const instance = instances.get(instanceId);
   if (!instance) {
     throw new Error(`Instance ${instanceId} not found`);
   }
 
-  // Check if script exists
-  if (!fs.existsSync(instance.scriptPath)) {
-    throw new Error(`Script not found: ${instance.scriptPath}`);
-  }
+  console.log(`🚀 STARTING BOT: ${instanceId}`);
+  console.log(`📁 Script: ${instance.scriptPath}`);
+  console.log(`📁 Directory: ${path.dirname(instance.scriptPath)}`);
+  console.log(`✅ File exists: ${fs.existsSync(instance.scriptPath)}`);
 
-  // Check if already running
-  if (instance.running && processes.has(instanceId)) {
-    throw new Error(`Instance ${instanceId} is already running`);
-  }
-   console.log(`=== STARTING BOT ${instanceId} ===`);
-  console.log(`Script path: ${instance.scriptPath}`);
-  console.log(`Directory: ${path.dirname(instance.scriptPath)}`);
-  console.log(`File exists: ${fs.existsSync(instance.scriptPath)}`);
-
+  // Check if we can read the file
   try {
     fs.accessSync(instance.scriptPath, fs.constants.R_OK);
-    console.log(`File is readable: YES`);
+    console.log(`📖 File is readable: YES`);
   } catch (err) {
-    console.log(`File is readable: NO - ${err.message}`);
+    console.log(`❌ File is readable: NO - ${err.message}`);
+    throw err;
   }
-
-  // Debug environment
-  console.log(`BOT_TOKEN available: ${!!process.env.BOT_TOKEN}`);
-  console.log(`Current directory: ${process.cwd()}`);
 
   const botProcess = spawn('node', [instance.scriptPath], {
     cwd: path.dirname(instance.scriptPath),
@@ -192,19 +179,22 @@ function startBotInstance(instanceId) {
       ...process.env,
       INSTANCE_ID: instanceId,
       MONITOR_SERVER: `http://localhost:${PORT}`,
-      AGENT_TOKEN: AGENT_TOKEN
+      AGENT_TOKEN: AGENT_TOKEN,
+      NODE_ENV: 'production'
     }
   });
+
+  console.log(`📊 Bot process spawned for ${instanceId}, PID: ${botProcess.pid}`);
 
   // Store process reference
   processes.set(instanceId, botProcess);
   instance.process = botProcess;
   instance.running = true;
 
-  // Handle process output
+  // Enhanced stdout handling
   botProcess.stdout.on('data', (data) => {
     const message = data.toString().trim();
-    logger.info(`[${instanceId}] ${message}`);
+    console.log(`[${instanceId} STDOUT]: ${message}`);
     
     // Add to instance logs
     instance.logs.push({
@@ -225,9 +215,10 @@ function startBotInstance(instanceId) {
     });
   });
 
+  // Enhanced stderr handling
   botProcess.stderr.on('data', (data) => {
     const message = data.toString().trim();
-    logger.error(`[${instanceId}] ${message}`);
+    console.error(`[${instanceId} STDERR]: ${message}`);
     
     // Add to instance logs
     instance.logs.push({
@@ -247,11 +238,10 @@ function startBotInstance(instanceId) {
       log: { level: 'error', message: message } 
     });
   });
- 
 
   // Handle process exit
   botProcess.on('exit', (code, signal) => {
-    logger.info(`Instance ${instanceId} exited with code ${code}, signal ${signal}`);
+    console.log(`[${instanceId} EXIT]: Code ${code}, Signal ${signal}`);
     
     instance.running = false;
     instance.process = null;
@@ -267,10 +257,14 @@ function startBotInstance(instanceId) {
     
     // Emit status update
     io.emit('instanceUpdate', { id: instanceId, running: false });
+    io.emit('logUpdate', { 
+      id: instanceId, 
+      log: { level: 'error', message: `Process exited (code: ${code})` } 
+    });
   });
 
   botProcess.on('error', (error) => {
-    logger.error(`Instance ${instanceId} process error: ${error.message}`);
+    console.error(`[${instanceId} PROCESS ERROR]: ${error.message}`);
     
     instance.running = false;
     instance.process = null;
@@ -278,9 +272,13 @@ function startBotInstance(instanceId) {
     
     // Emit status update
     io.emit('instanceUpdate', { id: instanceId, running: false });
+    io.emit('logUpdate', { 
+      id: instanceId, 
+      log: { level: 'error', message: `Process error: ${error.message}` } 
+    });
   });
 
-  logger.info(`Started instance ${instanceId}`);
+  console.log(`✅ Started instance ${instanceId}`);
   return botProcess;
 }
 
@@ -785,4 +783,5 @@ server.listen(PORT, '0.0.0.0', () => {
   });
 
 });
+
 
