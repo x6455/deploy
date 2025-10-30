@@ -1,0 +1,2311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
+    <style>
+        .sidebar {
+            transition: all 0.3s ease;
+        }
+        .card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .status-running {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+        .status-stopped {
+            background: linear-gradient(90deg, #ef4444, #f87171);
+        }
+        .status-starting {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, #3b82f6, #6366f1);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(90deg, #2563eb, #4f46e5);
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background: linear-gradient(90deg, #10b981, #34d399);
+            transition: all 0.3s ease;
+        }
+        .btn-success:hover {
+            background: linear-gradient(90deg, #059669, #10b981);
+            transform: translateY(-2px);
+        }
+        .btn-danger {
+            background: linear-gradient(90deg, #ef4444, #f87171);
+            transition: all 0.3s ease;
+        }
+        .btn-danger:hover {
+            background: linear-gradient(90deg, #dc2626, #ef4444);
+            transform: translateY(-2px);
+        }
+        .btn-warning {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+            transition: all 0.3s ease;
+        }
+        .btn-warning:hover {
+            background: linear-gradient(90deg, #d97706, #f59e0b);
+            transform: translateY(-2px);
+        }
+        .log-entry {
+            border-left: 4px solid;
+            animation: fadeIn 0.5s ease;
+        }
+        .log-info {
+            border-left-color: #3b82f6;
+        }
+        .log-error {
+            border-left-color: #ef4444;
+        }
+        .log-warning {
+            border-left-color: #f59e0b;
+        }
+        .log-success {
+            border-left-color: #10b981;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .sidebar-item {
+            transition: all 0.2s ease;
+        }
+        .sidebar-item:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+            transform: translateX(5px);
+        }
+        .sidebar-item.active {
+            background-color: rgba(59, 130, 246, 0.2);
+            border-right: 4px solid #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-800">Bot Monitor</h1>
+                <p class="text-gray-600 mt-2">Sign in to your dashboard</p>
+            </div>
+            <form id="loginForm">
+                <div class="mb-6">
+                    <label for="username" class="block text-gray-700 text-sm font-medium mb-2">Username</label>
+                    <input type="text" id="username" name="username" 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           placeholder="Enter your username" required>
+                </div>
+                <div class="mb-6">
+                    <label for="password" class="block text-gray-700 text-sm font-medium mb-2">Password</label>
+                    <input type="password" id="password" name="password" 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                           placeholder="Enter your password" required>
+                </div>
+                <button type="submit" 
+                        class="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium py-3 px-4 rounded-lg hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 transform hover:-translate-y-0.5">
+                    Sign In
+                </button>
+            </form>
+            <div id="loginError" class="mt-4 p-3 bg-red-50 text-red-700 rounded-lg hidden"></div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard" class="hidden min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="flex justify-between items-center px-6 py-4">
+                <div class="flex items-center">
+                    <button id="sidebarToggle" class="mr-4 text-gray-500 hover:text-gray-700 focus:outline-none">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <h1 class="text-xl font-semibold text-gray-800">Bot Monitoring Dashboard</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="connectionStatus" class="flex items-center">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                        <span class="text-sm text-gray-600">Connected</span>
+                    </span>
+                    <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex">
+            <!-- Sidebar -->
+            <div id="sidebar" class="sidebar bg-white w-64 min-h-screen border-r border-gray-200 py-6 px-4">
+                <nav>
+                    <ul class="space-y-2">
+                        <li>
+                            <a href="#" data-tab="overview" class="sidebar-item active flex items-center px-4 py-3 text-gray-700 rounded-lg font-medium">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                                </svg>
+                                Overview
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" data-tab="instances" class="sidebar-item flex items-center px-4 py-3 text-gray-700 rounded-lg font-medium">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                                </svg>
+                                Bot Instances
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" data-tab="logs" class="sidebar-item flex items-center px-4 py-3 text-gray-700 rounded-lg font-medium">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                System Logs
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" data-tab="database" class="sidebar-item flex items-center px-4 py-3 text-gray-700 rounded-lg font-medium">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                                </svg>
+                                Database
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" data-tab="settings" class="sidebar-item flex items-center px-4 py-3 text-gray-700 rounded-lg font-medium">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                                Settings
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="flex-1 p-6">
+                <!-- Overview Tab -->
+                <div id="overviewTab" class="tab-content">
+                    <div class="mb-8">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">Dashboard Overview</h2>
+                        <p class="text-gray-600">Monitor and manage all your bot instances in one place</p>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="card bg-white rounded-xl p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-lg bg-blue-100 text-blue-600 mr-4">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-600">Total Instances</p>
+                                    <h3 id="totalInstances" class="text-2xl font-bold text-gray-800">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card bg-white rounded-xl p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-lg bg-green-100 text-green-600 mr-4">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-600">Running</p>
+                                    <h3 id="runningInstances" class="text-2xl font-bold text-gray-800">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card bg-white rounded-xl p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-lg bg-red-100 text-red-600 mr-4">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-600">Stopped</p>
+                                    <h3 id="stoppedInstances" class="text-2xl font-bold text-gray-800">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card bg-white rounded-xl p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-lg bg-purple-100 text-purple-600 mr-4">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-600">Uptime</p>
+                                    <h3 id="avgUptime" class="text-2xl font-bold text-gray-800">0h</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Metrics -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="card bg-white rounded-xl p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Instance Status</h3>
+                            <div id="statusChartContainer" class="h-64">
+                                <canvas id="statusChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card bg-white rounded-xl p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Resource Usage</h3>
+                            <div id="resourceChartContainer" class="h-64">
+                                <canvas id="resourceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="card bg-white rounded-xl p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">Recent Activity</h3>
+                            <button id="refreshActivity" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="recentActivity" class="space-y-4 max-h-96 overflow-y-auto">
+                            <!-- Activity items will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instances Tab -->
+                <div id="instancesTab" class="tab-content hidden">
+                    <div class="mb-8">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">Bot Instances</h2>
+                        <p class="text-gray-600">Manage all your bot instances</p>
+                    </div>
+
+                    <div class="mb-6 flex justify-between items-center">
+                        <div class="flex space-x-4">
+                            <button id="reloadBots" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Reload Bots
+                            </button>
+                            <button id="startAllBtn" class="btn-success text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Start All
+                            </button>
+                            <button id="stopAllBtn" class="btn-danger text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Stop All
+                            </button>
+                        </div>
+                        <div class="relative">
+                            <input type="text" id="instanceSearch" placeholder="Search instances..." 
+                                   class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div id="instancesList" class="grid grid-cols-1 gap-6">
+                        <!-- Instances will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Logs Tab -->
+                <div id="logsTab" class="tab-content hidden">
+                    <div class="mb-8">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">System Logs</h2>
+                        <p class="text-gray-600">Monitor real-time logs from all instances</p>
+                    </div>
+
+                    <div class="card bg-white rounded-xl p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <div class="flex space-x-4">
+                                    <select id="logInstanceFilter" title="Filter logs by instance" aria-label="Filter logs by instance" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="all">All Instances</option>
+                                    </select>
+                                    <select id="logLevelFilter" title="Filter logs by level" aria-label="Filter logs by level" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="all">All Levels</option>
+                                        <option value="info">Info</option>
+                                        <option value="error">Error</option>
+                                        <option value="warning">Warning</option>
+                                    </select>
+                                </div>
+                            <div class="flex space-x-4">
+                                <button id="clearLogs" class="btn-danger text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                    Clear Logs
+                                </button>
+                                <button id="pauseLogs" class="btn-warning text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                    Pause
+                                </button>
+                            </div>
+                        </div>
+                        <div id="logsContainer" class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto font-mono text-sm">
+                            <!-- Logs will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
+
+                
+<!-- Replace the entire Database Tab section with this enhanced version -->
+<div id="databaseTab" class="tab-content hidden">
+    <div class="mb-8">
+        <h2 class="text-2xl font-bold text-gray-800 mb-2">Database Management</h2>
+        <p class="text-gray-600">Edit database with MongoDB Atlas-like interface</p>
+    </div>
+
+    <div class="card bg-white rounded-xl p-6">
+        <!-- Instance Selection -->
+        <div class="mb-6">
+            <label for="dbInstanceSelect" class="block text-sm font-medium text-gray-700 mb-2">Select Instance</label>
+            <div class="flex gap-4">
+                <select id="dbInstanceSelect" class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select an instance</option>
+                </select>
+                <button id="loadDb" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    Load Database
+                </button>
+            </div>
+        </div>
+
+        <!-- Database Stats and Actions -->
+        <div id="dbStats" class="hidden mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-6">
+                    <div>
+                        <span class="text-sm text-gray-600">Collection:</span>
+                        <span id="collectionName" class="ml-2 font-medium">main</span>
+                    </div>
+                    <div>
+                        <span class="text-sm text-gray-600">Documents:</span>
+                        <span id="documentCount" class="ml-2 font-medium">0</span>
+                    </div>
+                    <div>
+                        <span class="text-sm text-gray-600">Size:</span>
+                        <span id="dbSize" class="ml-2 font-medium">0 KB</span>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="refreshDb" class="text-gray-600 hover:text-gray-800 px-3 py-1 rounded border border-gray-300 text-sm flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Refresh
+                    </button>
+                    <button id="exportJson" class="text-gray-600 hover:text-gray-800 px-3 py-1 rounded border border-gray-300 text-sm flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Export
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Bar -->
+        <div id="queryBar" class="hidden mb-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div class="flex items-center justify-between mb-2">
+                <h4 class="text-sm font-medium text-gray-700">Query Documents</h4>
+                <button id="toggleQueryHelp" class="text-blue-600 text-xs">Show Help</button>
+            </div>
+            <div class="flex gap-2">
+                <div class="flex-1">
+                    <input type="text" id="queryInput" placeholder='{"field": "value"}' 
+                           class="w-full px-3 py-2 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+                <button id="runQuery" class="btn-primary text-white px-4 py-2 rounded text-sm font-medium">
+                    Find
+                </button>
+                <button id="clearQuery" class="text-gray-600 hover:text-gray-800 px-3 py-2 rounded border border-gray-300 text-sm">
+                    Clear
+                </button>
+            </div>
+            <div id="queryHelp" class="mt-2 text-xs text-gray-500 hidden">
+                <p>Use MongoDB query syntax. Examples:</p>
+                <ul class="list-disc list-inside ml-2 mt-1">
+                    <li><code>{"name": "John"}</code> - Find documents where name equals "John"</li>
+                    <li><code>{"age": {"$gt": 25}}</code> - Find documents where age is greater than 25</li>
+                    <li><code>{"$or": [{"status": "active"}, {"status": "pending"}]}</code> - Find documents with status active or pending</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Document Viewer/Editor -->
+        <div id="documentViewer" class="hidden">
+            <!-- Toolbar -->
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex space-x-2">
+                    <button id="addDocumentBtn" class="btn-success text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Add Document
+                    </button>
+                    <button id="saveDb" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Save Changes
+                    </button>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm text-gray-600">
+                        <span id="showingCount">0</span> of <span id="totalCount">0</span> documents
+                    </div>
+                    <div class="flex items-center">
+                        <span class="text-sm text-gray-600 mr-2">View:</span>
+                        <select id="viewMode" title="View mode" aria-label="View mode" class="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            
+                            <option value="table">Table</option>
+                            <option value="json">JSON</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table View -->
+            <div id="tableView" class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr id="tableHeaders">
+                                <!-- Headers will be populated here -->
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="bg-white divide-y divide-gray-200">
+                            <!-- Rows will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="emptyTableState" class="text-center py-8 text-gray-500 hidden">
+                    <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <p class="mt-2">No documents found</p>
+                    <button id="addFirstDocument" class="mt-2 text-blue-600 hover:text-blue-800 text-sm">
+                        Add your first document
+                    </button>
+                </div>
+            </div>
+
+            <!-- JSON View -->
+            <div id="jsonView" class="hidden bg-gray-800 rounded-lg p-4 font-mono text-sm overflow-auto max-h-96">
+                <pre id="dbData" class="text-green-400"></pre>
+            </div>
+
+            <!-- Pagination -->
+            <div id="pagination" class="mt-4 flex justify-between items-center hidden">
+                <div class="text-sm text-gray-600">
+                    Page <span id="currentPage">1</span> of <span id="totalPages">1</span>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="prevPage" class="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50" disabled>
+                        Previous
+                    </button>
+                    <button id="nextPage" class="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50" disabled>
+                        Next
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Modal -->
+        <div id="documentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-800" id="modalTitle">Add Document</h3>
+                    <button id="closeModal" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto max-h-[70vh]">
+                    <div id="modalContent">
+                        <!-- Modal content will be populated here -->
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
+                    <button id="cancelModal" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button id="saveDocument" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium">
+                        Save Document
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Enhanced Database Management Functions
+let currentDbData = null;
+let currentViewMode = 'table';
+let currentPage = 1;
+const pageSize = 10;
+let filteredData = null;
+
+function initializeDatabaseEditor() {
+    // Set up event listeners
+    document.getElementById('loadDb')?.addEventListener('click', loadDatabase);
+    document.getElementById('saveDb')?.addEventListener('click', saveDatabase);
+    document.getElementById('refreshDb')?.addEventListener('click', loadDatabase);
+    document.getElementById('exportJson')?.addEventListener('click', exportJson);
+    document.getElementById('addDocumentBtn')?.addEventListener('click', showAddDocumentModal);
+    document.getElementById('addFirstDocument')?.addEventListener('click', showAddDocumentModal);
+    document.getElementById('viewMode')?.addEventListener('change', toggleViewMode);
+    document.getElementById('toggleQueryHelp')?.addEventListener('click', toggleQueryHelp);
+    document.getElementById('runQuery')?.addEventListener('click', runQuery);
+    document.getElementById('clearQuery')?.addEventListener('click', clearQuery);
+    document.getElementById('prevPage')?.addEventListener('click', goToPrevPage);
+    document.getElementById('nextPage')?.addEventListener('click', goToNextPage);
+    document.getElementById('closeModal')?.addEventListener('click', closeModal);
+    document.getElementById('cancelModal')?.addEventListener('click', closeModal);
+    document.getElementById('saveDocument')?.addEventListener('click', saveDocument);
+}
+
+// Load database from server
+async function loadDatabase() {
+    const instanceId = document.getElementById('dbInstanceSelect').value;
+    if (!instanceId) {
+        showNotification('Please select an instance', 'warning');
+        return;
+    }
+    
+    try {
+        // Auto-detect server URL based on current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // If served from same origin as monitor server, use relative path
+    if (window.location.port === '3000' || window.location.hostname === 'localhost') {
+        return window.location.origin;
+    }
+
+    // Otherwise, assume monitor server is at same domain but port 3000
+    // Or fallback to current origin (for ngrok, Cloudflare Tunnel, etc.)
+    return window.location.origin;
+}
+
+// Use dynamic URL
+const serverUrl = getServerUrl();
+        const response = await fetch(`${serverUrl}/api/db/${instanceId}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            currentDbData = await response.json();
+            filteredData = currentDbData;
+            renderDatabaseView();
+            showNotification('Database loaded successfully', 'success');
+        } else {
+            const errorData = await response.json();
+            let errorMessage = errorData.error || 'Failed to load database';
+            
+            if (errorMessage.includes('Encryption key not configured')) {
+                errorMessage = 'Database encryption is not configured on the server.';
+            } else if (errorMessage.includes('Encryption key must be 32 characters')) {
+                errorMessage = 'Database encryption key must be exactly 32 characters long.';
+            }
+            
+            showNotification(errorMessage, 'error');
+        }
+    } catch (error) {
+        showNotification('Error loading database: ' + error.message, 'error');
+    }
+}
+
+// Render the database view based on current view mode
+// Render the database view based on current view mode
+function renderDatabaseView() {
+    if (!currentDbData) return;
+    
+    // Show database stats and tools
+    const dbStats = document.getElementById('dbStats');
+    const queryBar = document.getElementById('queryBar');
+    const documentViewer = document.getElementById('documentViewer');
+    
+    dbStats?.classList.remove('hidden');
+    queryBar?.classList.remove('hidden');
+    documentViewer?.classList.remove('hidden');
+    
+    // Update stats
+    updateDatabaseStats();
+    
+    // Render based on view mode
+    if (currentViewMode === 'table') {
+        renderTableView();
+    } else {
+        renderJsonView();
+    }
+    
+    // Update pagination
+    updatePagination();
+}
+// Update database statistics
+function updateDatabaseStats() {
+    if (!currentDbData) return;
+    
+    const data = filteredData || currentDbData;
+    const documentCount = Array.isArray(data) ? data.length : Object.keys(data).length;
+    const dbSize = new Blob([JSON.stringify(data)]).size;
+    
+    const documentCountEl = document.getElementById('documentCount');
+    const dbSizeEl = document.getElementById('dbSize');
+    const totalCountEl = document.getElementById('totalCount');
+    const showingCountEl = document.getElementById('showingCount');
+    
+    if (documentCountEl) documentCountEl.textContent = documentCount;
+    if (dbSizeEl) dbSizeEl.textContent = `${(dbSize / 1024).toFixed(2)} KB`;
+    if (totalCountEl) totalCountEl.textContent = documentCount;
+    if (showingCountEl) showingCountEl.textContent = documentCount;
+}
+
+// Render table view of documents
+function renderTableView() {
+    const data = filteredData || currentDbData;
+    if (!data) return;
+    
+    const tableHeaders = document.getElementById('tableHeaders');
+    const tableBody = document.getElementById('tableBody');
+    const emptyTableState = document.getElementById('emptyTableState');
+    
+    // Clear previous content
+    tableHeaders.innerHTML = '';
+    tableBody.innerHTML = '';
+    
+    if ((Array.isArray(data) && data.length === 0) || (!Array.isArray(data) && Object.keys(data).length === 0)) {
+        emptyTableState.classList.remove('hidden');
+        return;
+    }
+    
+    emptyTableState.classList.add('hidden');
+    
+    // Get all unique fields for headers
+    const allFields = getAllFields(data);
+    
+    // Add headers
+    allFields.forEach(field => {
+        const th = document.createElement('th');
+        th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+        th.textContent = field;
+        tableHeaders.appendChild(th);
+    });
+    
+    // Add actions header
+    const actionsTh = document.createElement('th');
+    actionsTh.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+    actionsTh.textContent = 'Actions';
+    tableHeaders.appendChild(actionsTh);
+    
+    // Add rows
+    const items = Array.isArray(data) ? data : Object.entries(data);
+    
+    // Apply pagination
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, items.length);
+    const pageItems = items.slice(startIndex, endIndex);
+    
+    pageItems.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+        
+        // Add cells for each field
+        allFields.forEach(field => {
+            const td = document.createElement('td');
+            td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+            
+            let value = '';
+            if (Array.isArray(data)) {
+                value = item[field] !== undefined ? String(item[field]) : '';
+            } else {
+                value = item[1][field] !== undefined ? String(item[1][field]) : '';
+            }
+            
+            td.textContent = value.length > 50 ? value.substring(0, 50) + '...' : value;
+            td.title = value;
+            tr.appendChild(td);
+        });
+        
+        // Add actions cell
+        const actionsTd = document.createElement('td');
+        actionsTd.className = 'px-6 py-4 whitespace-nowrap text-sm font-medium';
+        actionsTd.innerHTML = `
+            <button class="text-blue-600 hover:text-blue-900 edit-document mr-3" data-index="${startIndex + index}">Edit</button>
+            <button class="text-red-600 hover:text-red-900 delete-document" data-index="${startIndex + index}">Delete</button>
+        `;
+        tr.appendChild(actionsTd);
+        
+        tableBody.appendChild(tr);
+    });
+    
+    // Add event listeners to action buttons
+    document.querySelectorAll('.edit-document').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-index'));
+            showEditDocumentModal(index);
+        });
+    });
+    
+    document.querySelectorAll('.delete-document').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-index'));
+            deleteDocument(index);
+        });
+    });
+}
+
+// Render JSON view of documents
+function renderJsonView() {
+    const data = filteredData || currentDbData;
+    if (!data) return;
+    
+    const jsonView = document.getElementById('jsonView');
+    const dbData = document.getElementById('dbData');
+    
+    jsonView.classList.remove('hidden');
+    document.getElementById('tableView').classList.add('hidden');
+    
+    dbData.textContent = JSON.stringify(data, null, 2);
+}
+
+// Toggle between table and JSON view
+function toggleViewMode() {
+    currentViewMode = document.getElementById('viewMode').value;
+    
+    if (currentViewMode === 'table') {
+        document.getElementById('tableView').classList.remove('hidden');
+        document.getElementById('jsonView').classList.add('hidden');
+        renderTableView();
+    } else {
+        document.getElementById('tableView').classList.add('hidden');
+        document.getElementById('jsonView').classList.remove('hidden');
+        renderJsonView();
+    }
+}
+
+// Get all unique fields from data
+function getAllFields(data) {
+    const fields = new Set();
+    
+    if (Array.isArray(data)) {
+        data.forEach(item => {
+            Object.keys(item).forEach(key => fields.add(key));
+        });
+    } else {
+        Object.values(data).forEach(item => {
+            Object.keys(item).forEach(key => fields.add(key));
+        });
+    }
+    
+    return Array.from(fields);
+}
+
+// Update pagination controls
+function updatePagination() {
+    const data = filteredData || currentDbData;
+    if (!data) return;
+    
+    const items = Array.isArray(data) ? data : Object.entries(data);
+    const totalPages = Math.ceil(items.length / pageSize);
+    
+    const pagination = document.getElementById('pagination');
+    const currentPageEl = document.getElementById('currentPage');
+    const totalPagesEl = document.getElementById('totalPages');
+    const prevPageBtn = document.getElementById('prevPage');
+    const nextPageBtn = document.getElementById('nextPage');
+    
+    if (totalPages <= 1) {
+        pagination.classList.add('hidden');
+        return;
+    }
+    
+    pagination.classList.remove('hidden');
+    currentPageEl.textContent = currentPage;
+    totalPagesEl.textContent = totalPages;
+    
+    prevPageBtn.disabled = currentPage === 1;
+    nextPageBtn.disabled = currentPage === totalPages;
+}
+
+// Navigate to previous page
+function goToPrevPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        renderTableView();
+        updatePagination();
+    }
+}
+
+// Navigate to next page
+function goToNextPage() {
+    const data = filteredData || currentDbData;
+    if (!data) return;
+    
+    const items = Array.isArray(data) ? data : Object.entries(data);
+    const totalPages = Math.ceil(items.length / pageSize);
+    
+    if (currentPage < totalPages) {
+        currentPage++;
+        renderTableView();
+        updatePagination();
+    }
+}
+
+// Show add document modal
+function showAddDocumentModal() {
+    document.getElementById('modalTitle').textContent = 'Add Document';
+    document.getElementById('modalContent').innerHTML = `
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Document JSON</label>
+                <textarea id="documentJson" class="w-full h-64 font-mono text-sm border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder='{"key": "value"}'></textarea>
+                <p class="text-xs text-gray-500 mt-1">Enter valid JSON for the new document</p>
+            </div>
+        </div>
+    `;
+    document.getElementById('documentModal').classList.remove('hidden');
+}
+
+// Show edit document modal
+function showEditDocumentModal(index) {
+    const data = filteredData || currentDbData;
+    if (!data) return;
+    
+    const items = Array.isArray(data) ? data : Object.entries(data);
+    const item = items[index];
+    
+    document.getElementById('modalTitle').textContent = 'Edit Document';
+    document.getElementById('modalContent').innerHTML = `
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Document JSON</label>
+                <textarea id="documentJson" class="w-full h-64 font-mono text-sm border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500">${JSON.stringify(Array.isArray(data) ? item : {key: item[0], ...item[1]}, null, 2)}</textarea>
+                <p class="text-xs text-gray-500 mt-1">Edit the document JSON</p>
+            </div>
+        </div>
+    `;
+    document.getElementById('documentModal').classList.remove('hidden');
+    document.getElementById('saveDocument').setAttribute('data-index', index);
+}
+
+// Close modal
+function closeModal() {
+    document.getElementById('documentModal').classList.add('hidden');
+    document.getElementById('saveDocument').removeAttribute('data-index');
+}
+
+// Save document (add or edit)
+function saveDocument() {
+    const jsonText = document.getElementById('documentJson').value;
+    
+    try {
+        const documentData = JSON.parse(jsonText);
+        const index = document.getElementById('saveDocument').getAttribute('data-index');
+        
+        if (index !== null) {
+            // Editing existing document
+            updateDocument(parseInt(index), documentData);
+        } else {
+            // Adding new document
+            addDocument(documentData);
+        }
+        
+        closeModal();
+    } catch (error) {
+        showNotification('Invalid JSON format: ' + error.message, 'error');
+    }
+}
+
+// Add new document to database
+function addDocument(documentData) {
+    if (!currentDbData) return;
+    
+    if (Array.isArray(currentDbData)) {
+        currentDbData.push(documentData);
+    } else {
+        // For object-based data, generate a key or use provided key
+        const key = documentData.key || `doc_${Date.now()}`;
+        const { key: _, ...data } = documentData; // Remove key property if it exists
+        currentDbData[key] = data;
+    }
+    
+    filteredData = currentDbData;
+    renderDatabaseView();
+    showNotification('Document added successfully', 'success');
+}
+
+// Update existing document
+function updateDocument(index, documentData) {
+    if (!currentDbData) return;
+    
+    const items = Array.isArray(currentDbData) ? currentDbData : Object.entries(currentDbData);
+    
+    if (Array.isArray(currentDbData)) {
+        currentDbData[index] = documentData;
+    } else {
+        const key = items[index][0];
+        const { key: _, ...data } = documentData; // Remove key property if it exists
+        currentDbData[key] = data;
+    }
+    
+    filteredData = currentDbData;
+    renderDatabaseView();
+    showNotification('Document updated successfully', 'success');
+}
+
+// Delete document
+function deleteDocument(index) {
+    if (!confirm('Are you sure you want to delete this document?')) return;
+    
+    if (!currentDbData) return;
+    
+    const items = Array.isArray(currentDbData) ? currentDbData : Object.entries(currentDbData);
+    
+    if (Array.isArray(currentDbData)) {
+        currentDbData.splice(index, 1);
+    } else {
+        const key = items[index][0];
+        delete currentDbData[key];
+    }
+    
+    filteredData = currentDbData;
+    renderDatabaseView();
+    showNotification('Document deleted successfully', 'success');
+}
+
+// Run query on documents
+function runQuery() {
+    const queryText = document.getElementById('queryInput').value;
+    
+    if (!queryText.trim()) {
+        filteredData = currentDbData;
+        renderDatabaseView();
+        return;
+    }
+    
+    try {
+        let query;
+try {
+  query = JSON.parse(queryText);
+} catch {
+  // fallback: simple text search
+  query = { _text: queryText.trim() };
+}
+
+        filterDocuments(query);
+    } catch (error) {
+        showNotification('Invalid query format: ' + error.message, 'error');
+    }
+}
+
+// Filter documents based on query
+function filterDocuments(query) {
+    if (!currentDbData) return;
+    
+    const data = Array.isArray(currentDbData) ? currentDbData : Object.values(currentDbData);
+    
+    // Simple filtering - in a real implementation, you'd use a proper query engine
+    filteredData = data.filter(item => {
+        return Object.keys(query).every(key => {
+            const queryValue = query[key];
+            const itemValue = item[key];
+            
+            // Simple equality check - extend this for more complex queries
+            if (typeof queryValue === 'object' && queryValue !== null) {
+                // Handle MongoDB-style operators
+                if (queryValue.$gt !== undefined) {
+                    return itemValue > queryValue.$gt;
+                }
+                if (queryValue.$lt !== undefined) {
+                    return itemValue < queryValue.$lt;
+                }
+                if (queryValue.$regex !== undefined) {
+                    const regex = new RegExp(queryValue.$regex);
+                    return regex.test(String(itemValue));
+                }
+            }
+            
+            // Default to equality check
+            return String(itemValue) === String(queryValue);
+        });
+    });
+
+    if (query._text) {
+  const text = query._text.toLowerCase();
+  filteredData = data.filter(item =>
+    Object.values(item).some(v => String(v).toLowerCase().includes(text))
+  );
+  currentPage = 1;
+  renderDatabaseView();
+  showNotification(`Found ${filteredData.length} matching "${text}"`, 'info');
+  return;
+}
+
+    
+    currentPage = 1;
+    renderDatabaseView();
+    showNotification(`Found ${filteredData.length} documents matching query`, 'info');
+}
+
+// Clear query and show all documents
+function clearQuery() {
+    document.getElementById('queryInput').value = '';
+    filteredData = currentDbData;
+    currentPage = 1;
+    renderDatabaseView();
+}
+
+// Toggle query help
+function toggleQueryHelp() {
+    const help = document.getElementById('queryHelp');
+    const button = document.getElementById('toggleQueryHelp');
+    
+    if (help.classList.contains('hidden')) {
+        help.classList.remove('hidden');
+        button.textContent = 'Hide Help';
+    } else {
+        help.classList.add('hidden');
+        button.textContent = 'Show Help';
+    }
+}
+
+// Export database as JSON
+function exportJson() {
+    if (!currentDbData) return;
+    
+    const dataStr = JSON.stringify(currentDbData, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'database_export.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    showNotification('JSON exported successfully', 'success');
+}
+
+async function saveDatabase() {
+    if (!currentDbData) {
+        showNotification('No data to save', 'warning');
+        return;
+    }
+
+    const instanceId = document.getElementById('dbInstanceSelect').value;
+    if (!instanceId) {
+        showNotification('Please select an instance', 'warning');
+        return;
+    }
+
+    // Sanitize data to ensure it's valid JSON
+    function sanitizeForJson(obj) {
+        return JSON.parse(
+            JSON.stringify(obj, (key, value) => {
+                if (typeof value === 'undefined' || typeof value === 'function') return null;
+                if (Number.isNaN(value)) return null;
+                return value;
+            })
+        );
+    }
+
+    try {
+        const sanitizedData = sanitizeForJson(currentDbData);
+
+        // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+
+        const response = await fetch(`${serverUrl}/api/db/${instanceId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(sanitizedData)
+        });
+
+        if (response.ok) {
+            showNotification('Database saved successfully', 'success');
+        } else {
+            const errorData = await response.json();
+            showNotification(`Failed to save database: ${errorData.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification('Error saving database: ' + error.message, 'error');
+    }
+}
+
+// Update the populateDbInstanceSelect function
+function populateDbInstanceSelect() {
+    const select = document.getElementById('dbInstanceSelect');
+    if (select) {
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        instances.forEach(instance => {
+            if (instance.dbPath) {
+                const option = document.createElement('option');
+                option.value = instance.id;
+                option.textContent = instance.id;
+                select.appendChild(option);
+            }
+        });
+    }
+}
+</script>
+
+
+                <!-- Settings Tab -->
+                <div id="settingsTab" class="tab-content hidden">
+                    <div class="mb-8">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">Settings</h2>
+                        <p class="text-gray-600">Configure your monitoring dashboard</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="card bg-white rounded-xl p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Server Configuration</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Server URL</label>
+                                    <input type="text" id="serverUrl" title="Server URL" placeholder="e.g. http://localhost:3000" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value="http://localhost:3000">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Auto Refresh Interval</label>
+                                        <select id="refreshInterval" title="Auto Refresh Interval" aria-label="Auto Refresh Interval" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="5000">5 seconds</option>
+                                            <option value="10000" selected>10 seconds</option>
+                                            <option value="30000">30 seconds</option>
+                                            <option value="60000">1 minute</option>
+                                        </select>
+                                </div>
+                                <button id="saveSettings" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                    Save Settings
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card bg-white rounded-xl p-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">System Information</h3>
+                            <div class="space-y-3">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Dashboard Version</span>
+                                    <span class="font-medium">1.0.0</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Last Updated</span>
+                                    <span id="lastUpdated" class="font-medium">-</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Connected Instances</span>
+                                    <span id="connectedInstances" class="font-medium">0</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Socket Connection</span>
+                                    <span id="socketStatus" class="font-medium text-green-600">Connected</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let authToken = null;
+        let socket = null;
+        let instances = [];
+        let logsPaused = false;
+        let refreshInterval = null;
+        let statusChart = null;
+        let resourceChart = null;
+
+        // DOM elements
+        const loginScreen = document.getElementById('loginScreen');
+        const dashboard = document.getElementById('dashboard');
+        const loginForm = document.getElementById('loginForm');
+        const loginError = document.getElementById('loginError');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebar = document.getElementById('sidebar');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const tabLinks = document.querySelectorAll('[data-tab]');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+
+window.addEventListener('DOMContentLoaded', () => {
+    const savedToken = localStorage.getItem('authToken');
+    if (savedToken) {
+        authToken = savedToken;
+        initializeDashboard();
+    }
+    
+    // Initialize everything after DOM is fully ready
+    setTimeout(() => {
+        initializeDatabaseEditor(); // Initialize database functions
+        setupEventListeners();      // Setup other event listeners
+    }, 100);
+});
+function setupEventListeners() {
+    // Login form
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+
+    // Logout button
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+    // Sidebar toggle
+    if (sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
+
+    // Tab navigation
+    tabLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchTab(this.getAttribute('data-tab'));
+        });
+    });
+
+    // Instance management buttons - with null checks
+    const reloadBotsBtn = document.getElementById('reloadBots');
+    const startAllBtn = document.getElementById('startAllBtn');
+    const stopAllBtn = document.getElementById('stopAllBtn');
+    const refreshActivityBtn = document.getElementById('refreshActivity');
+    
+    if (reloadBotsBtn) reloadBotsBtn.addEventListener('click', reloadBots);
+    if (startAllBtn) startAllBtn.addEventListener('click', startAllInstances);
+    if (stopAllBtn) stopAllBtn.addEventListener('click', stopAllInstances);
+    if (refreshActivityBtn) refreshActivityBtn.addEventListener('click', loadInstances);
+
+    // Log management - with null checks
+    const clearLogsBtn = document.getElementById('clearLogs');
+    const pauseLogsBtn = document.getElementById('pauseLogs');
+    const logInstanceFilter = document.getElementById('logInstanceFilter');
+    const logLevelFilter = document.getElementById('logLevelFilter');
+    
+    if (clearLogsBtn) clearLogsBtn.addEventListener('click', clearLogs);
+    if (pauseLogsBtn) pauseLogsBtn.addEventListener('click', togglePauseLogs);
+    if (logInstanceFilter) logInstanceFilter.addEventListener('change', filterLogs);
+    if (logLevelFilter) logLevelFilter.addEventListener('change', filterLogs);
+
+    // Search functionality - with null checks
+    const instanceSearch = document.getElementById('instanceSearch');
+    if (instanceSearch) instanceSearch.addEventListener('input', filterInstances);
+    
+    // Settings - with null checks
+    const saveSettingsBtn = document.getElementById('saveSettings');
+    if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveSettings);
+    
+}
+
+        // Handle user login
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+            try {
+                const response = await fetch(`${serverUrl}/api/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    localStorage.setItem('serverUrl', serverUrl);
+                    initializeDashboard();
+                } else {
+                    const errorData = await response.json();
+                    showLoginError(errorData.error || 'Login failed');
+                }
+            } catch (error) {
+                showLoginError('Cannot connect to server. Please check the server URL.');
+            }
+        }
+
+        // Show login error
+        function showLoginError(message) {
+            loginError.textContent = message;
+            loginError.classList.remove('hidden');
+            setTimeout(() => {
+                loginError.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Handle user logout
+        function handleLogout() {
+            authToken = null;
+            localStorage.removeItem('authToken');
+            
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+            
+            dashboard.classList.add('hidden');
+            loginScreen.classList.remove('hidden');
+            
+            // Reset form
+            loginForm.reset();
+        }
+
+        // Initialize the dashboard after login
+        function initializeDashboard() {
+            loginScreen.classList.add('hidden');
+            dashboard.classList.remove('hidden');
+            
+            // Load server URL from storage or use default
+            // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+            if (document.getElementById('serverUrl')) {
+                document.getElementById('serverUrl').value = serverUrl;
+            }
+            
+            // Initialize socket connection
+            initializeSocket();
+            
+            // Load initial data
+            loadInstances();
+            
+            // Set up auto-refresh
+            setupAutoRefresh();
+            
+            // Initialize charts
+            initializeCharts();
+            
+            // Switch to overview tab
+            switchTab('overview');
+        }
+
+        // Initialize socket connection
+        function initializeSocket() {
+            // Auto-detect server URL based on current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // If served from same origin as monitor server, use relative path
+    if (window.location.port === '3000' || window.location.hostname === 'localhost') {
+        return window.location.origin;
+    }
+
+    // Otherwise, assume monitor server is at same domain but port 3000
+    // Or fallback to current origin (for ngrok, Cloudflare Tunnel, etc.)
+    return window.location.origin;
+}
+
+// Use dynamic URL
+const serverUrl = getServerUrl();
+
+             socket = io(serverUrl, {
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000
+});
+
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+                console.log('Connected to server');
+            });
+
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+                console.log('Disconnected from server');
+            });
+
+            socket.on('instanceUpdate', (data) => {
+                updateInstanceStatus(data.id, data.running);
+            });
+
+            socket.on('metricsUpdate', (data) => {
+                updateInstanceMetrics(data.id, data.metrics);
+            });
+
+            socket.on('logUpdate', (data) => {
+                if (!logsPaused) {
+                    addLogEntry(data.id, data.log);
+                }
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Socket connection error:', error);
+                updateConnectionStatus(false);
+            });
+        }
+
+        // Update connection status indicator
+        function updateConnectionStatus(connected) {
+            const statusIndicator = connectionStatus.querySelector('.w-2');
+            const statusText = connectionStatus.querySelector('span:last-child');
+            
+            if (connected) {
+                statusIndicator.classList.remove('bg-red-500');
+                statusIndicator.classList.add('bg-green-500');
+                statusText.textContent = 'Connected';
+                statusText.classList.remove('text-red-600');
+                statusText.classList.add('text-green-600');
+                
+                if (document.getElementById('socketStatus')) {
+                    document.getElementById('socketStatus').textContent = 'Connected';
+                    document.getElementById('socketStatus').classList.remove('text-red-600');
+                    document.getElementById('socketStatus').classList.add('text-green-600');
+                }
+            } else {
+                statusIndicator.classList.remove('bg-green-500');
+                statusIndicator.classList.add('bg-red-500');
+                statusText.textContent = 'Disconnected';
+                statusText.classList.remove('text-green-600');
+                statusText.classList.add('text-red-600');
+                
+                if (document.getElementById('socketStatus')) {
+                    document.getElementById('socketStatus').textContent = 'Disconnected';
+                    document.getElementById('socketStatus').classList.remove('text-green-600');
+                    document.getElementById('socketStatus').classList.add('text-red-600');
+                }
+            }
+        }
+
+        // Toggle sidebar on mobile
+        function toggleSidebar() {
+            sidebar.classList.toggle('hidden');
+            sidebar.classList.toggle('lg:block');
+        }
+
+        // Switch between tabs
+        function switchTab(tabName) {
+            // Hide all tab contents
+            tabContents.forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // Remove active class from all tab links
+            tabLinks.forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(`${tabName}Tab`).classList.remove('hidden');
+            
+            // Add active class to selected tab link
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            
+            // Perform tab-specific initialization
+            switch(tabName) {
+                case 'instances':
+                    loadInstances();
+                    break;
+                case 'logs':
+                    populateInstanceFilter();
+                    break;
+                case 'database':
+                    populateDbInstanceSelect();
+                    break;
+            }
+        }
+
+        // Load all bot instances
+        async function loadInstances() {
+            try {
+                // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+                const response = await fetch(`${serverUrl}/api/instances`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    instances = await response.json();
+                    renderInstances();
+                    updateDashboardStats();
+                    updateCharts();
+                } else {
+                    console.error('Failed to load instances');
+                }
+            } catch (error) {
+                console.error('Error loading instances:', error);
+            }
+        }
+
+        // Render instances list
+        function renderInstances() {
+            const instancesList = document.getElementById('instancesList');
+            const searchTerm = document.getElementById('instanceSearch').value.toLowerCase();
+            
+            // Filter instances based on search
+            const filteredInstances = instances.filter(instance => 
+                instance.id.toLowerCase().includes(searchTerm) || 
+                instance.folder.toLowerCase().includes(searchTerm)
+            );
+            
+            instancesList.innerHTML = '';
+            
+            filteredInstances.forEach(instance => {
+                const instanceCard = document.createElement('div');
+                instanceCard.className = 'card bg-white rounded-xl p-6';
+                instanceCard.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">${instance.id}</h3>
+                            <p class="text-gray-600 text-sm">${instance.folder}</p>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="status-${instance.running ? 'running' : 'stopped'} text-white text-xs font-medium px-2 py-1 rounded-full">
+                                ${instance.running ? 'RUNNING' : 'STOPPED'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <p class="text-xs text-gray-500">Uptime</p>
+                            <p class="text-sm font-medium">${formatUptime(instance.uptime || 0)}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Database</p>
+                            <p class="text-sm font-medium truncate">${instance.dbPath ? 'Available' : 'N/A'}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex space-x-2">
+                        <button class="start-btn ${instance.running ? 'hidden' : ''} btn-success text-white px-3 py-2 rounded-lg text-sm font-medium flex-1">
+                            Start
+                        </button>
+                        <button class="stop-btn ${!instance.running ? 'hidden' : ''} btn-danger text-white px-3 py-2 rounded-lg text-sm font-medium flex-1">
+                            Stop
+                        </button>
+                        <button class="restart-btn ${!instance.running ? 'hidden' : ''} btn-warning text-white px-3 py-2 rounded-lg text-sm font-medium flex-1">
+                            Restart
+                        </button>
+                        <button class="logs-btn btn-primary text-white px-3 py-2 rounded-lg text-sm font-medium flex-1">
+                            Logs
+                        </button>
+                    </div>
+                `;
+                
+                // Add event listeners to buttons
+                const startBtn = instanceCard.querySelector('.start-btn');
+                const stopBtn = instanceCard.querySelector('.stop-btn');
+                const restartBtn = instanceCard.querySelector('.restart-btn');
+                const logsBtn = instanceCard.querySelector('.logs-btn');
+                
+                startBtn.addEventListener('click', () => startInstance(instance.id));
+                stopBtn.addEventListener('click', () => stopInstance(instance.id));
+                restartBtn.addEventListener('click', () => restartInstance(instance.id));
+                logsBtn.addEventListener('click', () => {
+                    switchTab('logs');
+                    document.getElementById('logInstanceFilter').value = instance.id;
+                    filterLogs();
+                });
+                
+                instancesList.appendChild(instanceCard);
+            });
+            
+            // Update connected instances count in settings
+            if (document.getElementById('connectedInstances')) {
+                document.getElementById('connectedInstances').textContent = instances.length;
+            }
+        }
+
+        // Update dashboard statistics
+        function updateDashboardStats() {
+            const totalInstances = instances.length;
+            const runningInstances = instances.filter(i => i.running).length;
+            const stoppedInstances = totalInstances - runningInstances;
+            const avgUptime = instances.length > 0 ? 
+                instances.reduce((sum, i) => sum + (i.uptime || 0), 0) / instances.length : 0;
+            
+            document.getElementById('totalInstances').textContent = totalInstances;
+            document.getElementById('runningInstances').textContent = runningInstances;
+            document.getElementById('stoppedInstances').textContent = stoppedInstances;
+            document.getElementById('avgUptime').textContent = formatUptime(avgUptime);
+            
+            // Update recent activity
+            updateRecentActivity();
+        }
+
+        // Update recent activity section
+        function updateRecentActivity() {
+            const activityContainer = document.getElementById('recentActivity');
+            activityContainer.innerHTML = '';
+            
+            // Get recent status changes (last 5)
+            const recentChanges = instances
+                .map(instance => ({
+                    id: instance.id,
+                    status: instance.running ? 'started' : 'stopped',
+                    timestamp: new Date().toISOString() // In a real app, this would come from the server
+                }))
+                .slice(0, 5);
+            
+            recentChanges.forEach(activity => {
+                const activityItem = document.createElement('div');
+                activityItem.className = 'flex items-center p-3 bg-gray-50 rounded-lg';
+                activityItem.innerHTML = `
+                    <div class="w-2 h-2 rounded-full ${activity.status === 'started' ? 'bg-green-500' : 'bg-red-500'} mr-3"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium">Instance <span class="text-blue-600">${activity.id}</span> ${activity.status}</p>
+                        <p class="text-xs text-gray-500">${new Date(activity.timestamp).toLocaleString()}</p>
+                    </div>
+                `;
+                activityContainer.appendChild(activityItem);
+            });
+        }
+
+        // Filter instances based on search
+        function filterInstances() {
+            renderInstances();
+        }
+
+        // Start a specific instance
+        async function startInstance(instanceId) {
+            try {
+                // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+                const response = await fetch(`${serverUrl}/api/start/${instanceId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    // The socket will update the status automatically
+                    showNotification(`Instance ${instanceId} started successfully`, 'success');
+                } else {
+                    const errorData = await response.json();
+                    showNotification(`Failed to start instance: ${errorData.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification('Error starting instance', 'error');
+            }
+        }
+
+        // Stop a specific instance
+        async function stopInstance(instanceId) {
+            try {
+                // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+                const response = await fetch(`${serverUrl}/api/stop/${instanceId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    // The socket will update the status automatically
+                    showNotification(`Instance ${instanceId} stopped successfully`, 'success');
+                } else {
+                    const errorData = await response.json();
+                    showNotification(`Failed to stop instance: ${errorData.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification('Error stopping instance', 'error');
+            }
+        }
+
+        // Restart a specific instance
+        async function restartInstance(instanceId) {
+            try {
+                // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+                const response = await fetch(`${serverUrl}/api/restart/${instanceId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    showNotification(`Instance ${instanceId} restarted successfully`, 'success');
+                } else {
+                    const errorData = await response.json();
+                    showNotification(`Failed to restart instance: ${errorData.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification('Error restarting instance', 'error');
+            }
+        }
+
+        // Start all instances
+        async function startAllInstances() {
+            for (const instance of instances) {
+                if (!instance.running) {
+                    await startInstance(instance.id);
+                    // Add a small delay to avoid overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+            showNotification('Starting all instances', 'info');
+        }
+
+        // Stop all instances
+        async function stopAllInstances() {
+            for (const instance of instances) {
+                if (instance.running) {
+                    await stopInstance(instance.id);
+                    // Add a small delay to avoid overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+            showNotification('Stopping all instances', 'info');
+        }
+
+        // Reload bot list from server
+        async function reloadBots() {
+            try {
+                // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+                const response = await fetch(`${serverUrl}/api/reload-bots`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    showNotification('Instance list reloaded successfully', 'success');
+                    loadInstances();
+                } else {
+                    showNotification('Failed to reload Instance list', 'error');
+                }
+            } catch (error) {
+                showNotification('Error reloading Instance list', 'error');
+            }
+        }
+
+        // Update instance status when received from socket
+        function updateInstanceStatus(instanceId, running) {
+            const instance = instances.find(i => i.id === instanceId);
+            if (instance) {
+                instance.running = running;
+                renderInstances();
+                updateDashboardStats();
+                updateCharts();
+            }
+        }
+
+        // Update instance metrics when received from socket
+        function updateInstanceMetrics(instanceId, metrics) {
+            const instance = instances.find(i => i.id === instanceId);
+            if (instance) {
+                instance.metrics = metrics;
+                // We could update specific UI elements with metrics data here
+            }
+        }
+
+        // Initialize charts
+        function initializeCharts() {
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            statusChart = new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Running', 'Stopped'],
+                    datasets: [{
+                        data: [0, 0],
+                        backgroundColor: ['#10b981', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            const resourceCtx = document.getElementById('resourceChart').getContext('2d');
+            resourceChart = new Chart(resourceCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['CPU', 'Memory', 'Disk', 'Network'],
+                    datasets: [{
+                        label: 'Usage %',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: '#3b82f6',
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update charts with current data
+        function updateCharts() {
+            if (statusChart) {
+                const runningCount = instances.filter(i => i.running).length;
+                const stoppedCount = instances.length - runningCount;
+                
+                statusChart.data.datasets[0].data = [runningCount, stoppedCount];
+                statusChart.update();
+            }
+            
+            // For resource chart, we'd need actual metrics data from the server
+            // This is a placeholder with random data for demonstration
+            if (resourceChart) {
+                resourceChart.data.datasets[0].data = [
+                    Math.floor(Math.random() * 100),
+                    Math.floor(Math.random() * 100),
+                    Math.floor(Math.random() * 100),
+                    Math.floor(Math.random() * 100)
+                ];
+                resourceChart.update();
+            }
+        }
+
+        // Add a log entry to the logs tab
+        function addLogEntry(instanceId, logEntry) {
+            const logsContainer = document.getElementById('logsContainer');
+            const instanceFilter = document.getElementById('logInstanceFilter').value;
+            const levelFilter = document.getElementById('logLevelFilter').value;
+            
+            // Apply filters
+            if (instanceFilter !== 'all' && instanceFilter !== instanceId) return;
+            if (levelFilter !== 'all' && levelFilter !== logEntry.level) return;
+            
+            const logElement = document.createElement('div');
+            logElement.className = `log-entry log-${logEntry.level} mb-2 p-2 bg-white rounded`;
+            logElement.innerHTML = `
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="font-medium">${instanceId}</span>
+                    <span>${new Date().toLocaleTimeString()}</span>
+                </div>
+                <div class="text-sm">${logEntry.message}</div>
+            `;
+            
+            logsContainer.appendChild(logElement);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        // Populate instance filter in logs tab
+        function populateInstanceFilter() {
+            const filter = document.getElementById('logInstanceFilter');
+            // Clear existing options except "All Instances"
+            while (filter.children.length > 1) {
+                filter.removeChild(filter.lastChild);
+            }
+            
+            // Add instance options
+            instances.forEach(instance => {
+                const option = document.createElement('option');
+                option.value = instance.id;
+                option.textContent = instance.id;
+                filter.appendChild(option);
+            });
+        }
+
+        // Filter logs based on selected filters
+        function filterLogs() {
+            // In a real implementation, you would fetch filtered logs from the server
+            // For this demo, we'll just clear and re-add all logs (which is not efficient)
+            const logsContainer = document.getElementById('logsContainer');
+            logsContainer.innerHTML = '<div class="text-gray-500 text-center py-4">Logs are displayed in real-time. Use filters to narrow down results.</div>';
+        }
+
+        // Clear all logs
+        function clearLogs() {
+            const logsContainer = document.getElementById('logsContainer');
+            logsContainer.innerHTML = '<div class="text-gray-500 text-center py-4">Logs are displayed in real-time. Use filters to narrow down results.</div>';
+        }
+
+        // Toggle logs pause state
+        function togglePauseLogs() {
+            logsPaused = !logsPaused;
+            const pauseBtn = document.getElementById('pauseLogs');
+            pauseBtn.textContent = logsPaused ? 'Resume' : 'Pause';
+            pauseBtn.classList.toggle('btn-warning');
+            pauseBtn.classList.toggle('btn-success');
+        }
+
+        // Populate database instance select
+        function populateDbInstanceSelect() {
+            const select = document.getElementById('dbInstanceSelect');
+            // Clear existing options except the first one
+            while (select.children.length > 1) {
+                select.removeChild(select.lastChild);
+            }
+            
+            // Add instance options
+            instances.forEach(instance => {
+                if (instance.dbPath) {
+                    const option = document.createElement('option');
+                    option.value = instance.id;
+                    option.textContent = instance.id;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        async function loadDatabase() {
+    const instanceId = document.getElementById('dbInstanceSelect')?.value;
+    if (!instanceId) {
+        showNotification('Please select an instance', 'warning');
+        return;
+    }
+    
+    try {
+        // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+        const response = await fetch(`${serverUrl}/api/db/${instanceId}`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        if (response.ok) {
+            currentDbData = await response.json();
+           filteredData = currentDbData; // Initialize filtered data
+           renderDatabaseView();
+            renderJsonView(currentDbData);
+            
+            const dbEditor = document.getElementById('dbEditor');
+            const jsonView = document.getElementById('jsonView');
+            if (dbEditor) dbEditor.classList.remove('hidden');
+            if (jsonView) jsonView.classList.remove('hidden');
+            
+            showNotification('Database loaded successfully', 'success');
+        } else {
+            const errorData = await response.json();
+            let errorMessage = errorData.error || 'Failed to load database';
+            // Handle specific error cases
+            showNotification(errorMessage, 'error');
+        }
+
+        console.log('Element:', document.getElementById('someElementId'));
+    } catch (error) {
+        showNotification('Error loading database: ' + error.message, 'error');
+    }
+}
+
+        // Toggle database edit mode
+        function toggleEditDatabase() {
+            const dbData = document.getElementById('dbData');
+            const isEditable = dbData.getAttribute('contenteditable') === 'true';
+            
+            if (isEditable) {
+                dbData.setAttribute('contenteditable', 'false');
+                dbData.classList.remove('border', 'border-blue-500', 'p-2', 'bg-white');
+                document.getElementById('editDb').textContent = 'Edit';
+                document.getElementById('saveDb').classList.add('hidden');
+            } else {
+                dbData.setAttribute('contenteditable', 'true');
+                dbData.classList.add('border', 'border-blue-500', 'p-2', 'bg-white');
+                document.getElementById('editDb').textContent = 'Cancel';
+                document.getElementById('saveDb').classList.remove('hidden');
+            }
+        }
+
+        // Unified saveDatabase function
+async function saveDatabase() {
+    if (!currentDbData) {
+        showNotification('No data to save', 'warning');
+        return;
+    }
+
+    const instanceSelect = document.getElementById('dbInstanceSelect');
+    if (!instanceSelect) {
+        showNotification('Database instance selector not found', 'error');
+        return;
+    }
+
+    const instanceId = instanceSelect.value;
+    if (!instanceId) {
+        showNotification('Please select an instance', 'warning');
+        return;
+    }
+
+    // Sanitize data to ensure it's valid JSON
+    function sanitizeForJson(obj) {
+        return JSON.parse(
+            JSON.stringify(obj, (key, value) => {
+                if (typeof value === 'undefined' || typeof value === 'function') return null;
+                if (Number.isNaN(value)) return null;
+                return value;
+            })
+        );
+    }
+
+    try {
+        const sanitizedData = sanitizeForJson(currentDbData);
+
+        // Auto-detect the server URL from current page
+function getServerUrl() {
+    const saved = localStorage.getItem('serverUrl');
+    if (saved) return saved;
+
+    // Use current origin (works with ngrok, Cloudflare, local, etc.)
+    return window.location.origin;
+}
+
+const serverUrl = getServerUrl();
+        const response = await fetch(`${serverUrl}/api/db/${instanceId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(sanitizedData)
+        });
+
+        if (response.ok) {
+            showNotification('Database saved successfully', 'success');
+        } else {
+            const errorData = await response.json();
+            showNotification(`Failed to save database: ${errorData.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification('Error saving database: ' + error.message, 'error');
+    }
+}
+
+        // Save settings
+        function saveSettings() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const refreshInterval = document.getElementById('refreshInterval').value;
+            
+            localStorage.setItem('serverUrl', serverUrl);
+            localStorage.setItem('refreshInterval', refreshInterval);
+            
+            // Update auto-refresh interval
+            setupAutoRefresh();
+            
+            showNotification('Settings saved successfully', 'success');
+            
+            // Update last updated timestamp
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+        }
+
+        // Set up auto-refresh of instances
+        function setupAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            
+            const interval = localStorage.getItem('refreshInterval') || 10000;
+            refreshInterval = setInterval(loadInstances, parseInt(interval));
+        }
+
+        // Format uptime from seconds to human readable
+        function formatUptime(seconds) {
+            if (!seconds || seconds < 60) return '< 1m';
+            
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else {
+                return `${minutes}m`;
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg text-white max-w-sm transform transition-transform duration-300 translate-x-full`;
+            
+            // Set background color based on type
+            if (type === 'success') {
+                notification.classList.add('bg-green-500');
+            } else if (type === 'error') {
+                notification.classList.add('bg-red-500');
+            } else if (type === 'warning') {
+                notification.classList.add('bg-yellow-500');
+            } else {
+                notification.classList.add('bg-blue-500');
+            }
+            
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <span class="flex-1">${message}</span>
+                    <button class="ml-4 text-white hover:text-gray-200 focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            
+            // Add to page
+            document.body.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 10);
+            
+            // Set up close button
+            const closeBtn = notification.querySelector('button');
+            closeBtn.addEventListener('click', () => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            });
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.classList.add('translate-x-full');
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.parentNode.removeChild(notification);
+                        }
+                    }, 300);
+                }
+            }, 5000);
+        }
+
+        // Make functions available globally for inline event handlers
+        window.handleLogin = handleLogin;
+        window.handleLogout = handleLogout;
+        window.toggleSidebar = toggleSidebar;
+        window.switchTab = switchTab;
+        window.loadInstances = loadInstances;
+        window.reloadBots = reloadBots;
+        window.startAllInstances = startAllInstances;
+        window.stopAllInstances = stopAllInstances;
+        window.startInstance = startInstance;
+        window.stopInstance = stopInstance;
+        window.restartInstance = restartInstance;
+        window.clearLogs = clearLogs;
+        window.togglePauseLogs = togglePauseLogs;
+        window.filterLogs = filterLogs;
+        window.loadDatabase = loadDatabase;
+        window.saveDatabase = saveDatabase;
+        window.toggleEditDatabase = toggleEditDatabase;
+        window.saveSettings = saveSettings;
+        window.filterInstances = filterInstances;
+    </script>
+</body>
+</html>

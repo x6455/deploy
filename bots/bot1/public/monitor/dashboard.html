@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instance Monitor Dashboard</title>
+    <script>window.tailwind = { config: {} };</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+
+    <style>
+        :root {
+            --primary: #8b5cf6;
+            --primary-dark: #7c3aed;
+            --secondary: #06d6a0;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #0f172a;
+            --darker: #020617;
+            --light: #f8fafc;
+            --gray: #475569;
+            --gray-light: #64748b;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            color: #e2e8f0;
+        }
+
+        .glow {
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+        }
+
+        .instance-card {
+            transition: all 0.3s ease-in-out;
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border: 1px solid #334155;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .instance-card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 2px;
+                background: linear-gradient(90deg, var(--primary), var(--secondary));
+                transform: scaleX(0);
+                transition: transform 0.3s ease;
+            }
+
+            .instance-card:hover::before {
+                transform: scaleX(1);
+            }
+
+            .instance-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+                border-color: var(--primary);
+            }
+
+        .chart-box {
+            position: relative;
+            width: 100%;
+            height: 220px;
+            padding: 0.75rem;
+            background: rgba(15, 23, 42, 0.7);
+            border-radius: 0.75rem;
+            border: 1px solid #334155;
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        .metric-display {
+            position: absolute;
+            top: 0.4rem;
+            right: 0.75rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            background: rgba(30, 41, 59, 0.8);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            border: 1px solid #475569;
+        }
+
+            .metric-display.cpu {
+                color: var(--primary);
+            }
+
+            .metric-display.ram {
+                color: var(--secondary);
+            }
+
+        .log-content {
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            line-height: 1.3;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #334155;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        .status-running {
+            background-color: var(--secondary);
+            animation: pulse 2s infinite;
+        }
+
+        .status-stopped {
+            background-color: var(--danger);
+        }
+
+        .status-unknown {
+            background-color: var(--gray);
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .btn::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: -100%;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+                transition: left 0.5s;
+            }
+
+            .btn:hover::before {
+                left: 100%;
+            }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+
+            .btn-primary:hover {
+                box-shadow: 0 0 15px rgba(139, 92, 246, 0.5);
+            }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--secondary), #05a380);
+            color: white;
+        }
+
+            .btn-success:hover {
+                box-shadow: 0 0 15px rgba(6, 214, 160, 0.5);
+            }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger), #dc2626);
+            color: white;
+        }
+
+            .btn-danger:hover {
+                box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+            }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning), #d97706);
+            color: white;
+        }
+
+            .btn-warning:hover {
+                box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+            }
+
+        .btn-secondary {
+            background: rgba(30, 41, 59, 0.8);
+            color: #e2e8f0;
+            border: 1px solid #475569;
+        }
+
+            .btn-secondary:hover {
+                background: rgba(30, 41, 59, 1);
+                border-color: var(--primary);
+            }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(2, 6, 23, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 1rem;
+            -webkit-backdrop-filter: blur(5px);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 42rem;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #334155;
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid #334155;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-stats {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.75rem;
+            background: rgba(15, 23, 42, 0.7);
+            border-radius: 0.5rem;
+            border: 1px solid #334155;
+            flex: 1;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--gray-light);
+            margin-top: 0.25rem;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .login-container {
+            max-width: 28rem;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            border: 1px solid #334155;
+        }
+
+        .header-container {
+            background: rgba(15, 23, 42, 0.9);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            padding: 1rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #334155;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .connected {
+            background-color: var(--secondary);
+            box-shadow: 0 0 8px var(--secondary);
+        }
+
+        .connecting {
+            background-color: var(--warning);
+            box-shadow: 0 0 8px var(--warning);
+            animation: pulse 1.5s infinite;
+        }
+
+        .disconnected {
+            background-color: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+
+        .main-container {
+            padding: 1.5rem;
+            flex-grow: 1;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .dashboard-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            position: relative;
+            display: inline-block;
+        }
+
+            .dashboard-title::after {
+                content: '';
+                position: absolute;
+                bottom: -5px;
+                left: 0;
+                width: 100%;
+                height: 2px;
+                background: linear-gradient(90deg, var(--primary), transparent);
+            }
+
+        .dashboard-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .instances-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--gray-light);
+        }
+
+            .empty-state i {
+                font-size: 3rem;
+                margin-bottom: 1rem;
+                color: var(--gray);
+            }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .log-level-info {
+            color: var(--secondary);
+        }
+
+        .log-level-warn {
+            color: var(--warning);
+        }
+
+        .log-level-error {
+            color: var(--danger);
+        }
+
+        .log-level-debug {
+            color: var(--primary);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0.3;
+        }
+
+        input, textarea {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+        }
+
+            input:focus, textarea:focus {
+                outline: none;
+                border-color: var(--primary);
+                box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+            }
+
+        @media (max-width: 768px) {
+            .instances-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .header-container {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .action-buttons {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Animated Background Particles -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Header -->
+    <header class="header-container">
+        <div class="w-full max-w-7xl mx-auto flex justify-between items-center">
+            <div class="logo">
+                <i class="fas fa-server"></i>
+                <span>Instance Monitor</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="refresh-btn" onclick="manualRefresh()" class="btn btn-secondary hidden">
+                    <i class="fas fa-sync-alt"></i>
+                    Refresh
+                </button>
+                <button id="logout-btn" onclick="logout()" class="btn btn-danger hidden">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </button>
+                <div class="connection-status">
+                    <span id="socket-status" class="connection-dot connecting"></span>
+                    <span id="socket-text">Connecting...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-container">
+        <!-- Login Screen -->
+        <div id="login-screen" class="login-container fade-in">
+            <div class="text-center mb-6">
+                <div class="logo inline-flex mb-2">
+                    <i class="fas fa-server text-4xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white">Instance Monitor</h2>
+                <p class="text-gray-400">Access your dashboard</p>
+            </div>
+
+            <div id="login-message" class="hidden p-3 mb-4 text-sm text-red-300 bg-red-900/30 rounded-lg border border-red-800"></div>
+
+            <div class="space-y-4">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-300 mb-1">Username</label>
+                    <input id="username" type="text" value="admin"
+                           class="w-full p-3 focus:ring-2 focus:ring-purple-500 transition" />
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-300 mb-1">Password</label>
+                    <input id="password" type="password"
+                           class="w-full p-3 focus:ring-2 focus:ring-purple-500 transition" />
+                </div>
+
+                <button onclick="handleLogin()" class="w-full btn btn-primary mt-2 glow" id="login-button">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Login
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard" class="hidden fade-in">
+            <div class="dashboard-header">
+                <h2 class="dashboard-title">Monitored Instances</h2>
+            </div>
+
+            <div id="instance-list" class="instances-grid"></div>
+
+            <div id="loading-indicator" class="empty-state hidden">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p class="text-lg">Loading instances...</p>
+            </div>
+
+            <div id="no-instances" class="empty-state hidden">
+                <i class="fas fa-server"></i>
+                <p class="text-lg">No instances are currently registered.</p>
+                <p class="mt-2 text-gray-400">Add Instance from cli to get started.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Log Modal -->
+    <div id="log-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-xl font-semibold text-white">
+                    <i class="fas fa-file-alt mr-2"></i>
+                    Logs for <span id="log-instance-id" class="text-purple-400"></span>
+                </h3>
+                <button onclick="closeModal('log-modal')" class="btn btn-secondary">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="log-content">
+                    <pre id="log-data">Loading logs...</pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('log-modal')" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced DB Modal -->
+    <div id="db-modal" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3 class="text-xl font-semibold text-white">
+                    <i class="fas fa-database mr-2"></i>
+                    Database Editor - <span id="db-instance-id" class="text-purple-400"></span>
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button id="format-json" class="btn btn-secondary text-sm">
+                        <i class="fas fa-indent mr-1"></i>
+                        Format
+                    </button>
+                    <button id="minify-json" class="btn btn-secondary text-sm">
+                        <i class="fas fa-compress-alt mr-1"></i>
+                        Minify
+                    </button>
+                    <button onclick="closeModal('db-modal')" class="btn btn-secondary">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <div id="db-message" class="hidden mb-4 p-3 text-sm rounded-lg border"></div>
+
+                <div class="flex flex-col h-96">
+                    <!-- Toolbar -->
+                    <div class="flex items-center justify-between mb-3 p-2 bg-slate-800 rounded-lg">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-400" id="line-count">Line: 1, Col: 1</span>
+                            <span class="text-xs text-gray-400" id="json-size">Size: 0 bytes</span>
+                            <span class="text-xs text-gray-400" id="json-status">✓ Valid JSON</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="find-replace-btn" class="btn btn-secondary text-sm">
+                                <i class="fas fa-search mr-1"></i>
+                                Find
+                            </button>
+                            <button id="json-history-btn" class="btn btn-secondary text-sm">
+                                <i class="fas fa-history mr-1"></i>
+                                History
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Editor Container -->
+                    <div class="flex-1 relative border border-gray-600 rounded-lg overflow-hidden">
+                        <div id="editor-line-numbers" class="absolute left-0 top-0 bottom-0 w-12 bg-slate-900 text-gray-400 text-right font-mono text-sm overflow-hidden"></div>
+                        <textarea id="db-editor"
+                                  class="w-full h-full pl-14 pr-4 py-4 font-mono text-sm bg-slate-900 text-gray-100 resize-none focus:outline-none"
+                                  spellcheck="false"
+                                  placeholder="Enter JSON data..."></textarea>
+                    </div>
+
+                    <!-- Find & Replace Panel -->
+                    <div id="find-replace-panel" class="hidden mt-3 p-3 bg-slate-800 rounded-lg">
+                        <div class="grid grid-cols-2 gap-3 mb-2">
+                            <div>
+                                <label for="find-input" class="text-xs text-gray-300 block mb-1">Find</label>
+                                <input type="text" id="find-input" class="w-full p-2 text-sm bg-slate-700 border border-gray-600 rounded" placeholder="Search text..." title="Find text in the editor">
+                            </div>
+                            <div>
+                                <label for="replace-input" class="text-xs text-gray-300 block mb-1">Replace</label>
+                                <input type="text" id="replace-input" class="w-full p-2 text-sm bg-slate-700 border border-gray-600 rounded" placeholder="Replacement text..." title="Replacement text for matches">
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div class="flex gap-2">
+                                <button id="find-prev" class="btn btn-secondary text-sm">
+                                    <i class="fas fa-arrow-up"></i>
+                                    Previous
+                                </button>
+                                <button id="find-next" class="btn btn-secondary text-sm">
+                                    <i class="fas fa-arrow-down"></i>
+                                    Next
+                                </button>
+                                <button id="replace-btn" class="btn btn-secondary text-sm">
+                                    <i class="fas fa-exchange-alt"></i>
+                                    Replace
+                                </button>
+                                <button id="replace-all-btn" class="btn btn-secondary text-sm">
+                                    <i class="fas fa-sync-alt"></i>
+                                    Replace All
+                                </button>
+                            </div>
+                            <button id="close-find" class="btn btn-secondary text-sm">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- JSON History Panel -->
+                    <div id="json-history-panel" class="hidden mt-3 p-3 bg-slate-800 rounded-lg">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-sm font-semibold">Edit History</h4>
+                            <button id="close-history" class="btn btn-secondary text-sm">
+                                Close
+                            </button>
+                        </div>
+                        <div id="history-list" class="max-h-32 overflow-y-auto text-sm">
+                            <!-- History items will be added here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="mt-4 grid grid-cols-4 gap-2">
+                    <button onclick="insertJsonSnippet('object')" class="btn btn-secondary text-sm">
+                        <i class="fas fa-plus-square mr-1"></i>
+                        Add Object
+                    </button>
+                    <button onclick="insertJsonSnippet('array')" class="btn btn-secondary text-sm">
+                        <i class="fas fa-list mr-1"></i>
+                        Add Array
+                    </button>
+                    <button onclick="insertJsonSnippet('string')" class="btn btn-secondary text-sm">
+                        <i class="fas fa-font mr-1"></i>
+                        Add String
+                    </button>
+                    <button onclick="insertJsonSnippet('number')" class="btn btn-secondary text-sm">
+                        <i class="fas fa-hashtag mr-1"></i>
+                        Add Number
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button onclick="closeModal('db-modal')" class="btn btn-secondary">Cancel</button>
+                <button onclick="validateJSON()" class="btn btn-warning">
+                    <i class="fas fa-check-circle mr-1"></i>
+                    Validate
+                </button>
+                <button onclick="saveDB()" class="btn btn-primary glow" id="save-db-button">
+                    <i class="fas fa-save mr-1"></i>
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Instance Modal -->
+    <div id="add-instance-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-xl font-semibold text-white">
+                    <i class="fas fa-plus-circle mr-2"></i>
+                    Add New Instance
+                </h3>
+                <button onclick="closeModal('add-instance-modal')" class="btn btn-secondary">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="space-y-4">
+                    <div>
+                        <label for="instance-id" class="block text-sm font-medium text-gray-300 mb-1">Instance ID</label>
+                        <input id="instance-id" type="text"
+                               class="w-full p-3 focus:ring-2 focus:ring-purple-500" />
+                    </div>
+                    <div>
+                        <label for="instance-path" class="block text-sm font-medium text-gray-300 mb-1">Script Path</label>
+                        <input id="instance-path" type="text"
+                               class="w-full p-3 focus:ring-2 focus:ring-purple-500" />
+                    </div>
+                    <div>
+                        <label for="db-path" class="block text-sm font-medium text-gray-300 mb-1">Database Path (Optional)</label>
+                        <input id="db-path" type="text"
+                               class="w-full p-3 focus:ring-2 focus:ring-purple-500" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('add-instance-modal')" class="btn btn-secondary">Cancel</button>
+                <button onclick="addInstance()" class="btn btn-primary glow">
+                    <i class="fas fa-plus mr-1"></i>
+                    Add Instance
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DB Editor State
+        const DB_EDITOR_STATE = {
+            history: [],
+            currentHistoryIndex: -1,
+            findState: {
+                currentMatch: -1,
+                matches: []
+            }
+        };
+
+        // Helper to get element
+        const getEl = id => document.getElementById(id);
+
+        // Create animated background particles
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = 50;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+
+                // Random position
+                const posX = Math.random() * 100;
+                const posY = Math.random() * 100;
+
+                // Random size
+                const size = Math.random() * 3 + 1;
+
+                // Random animation
+                const duration = Math.random() * 20 + 10;
+                const delay = Math.random() * 5;
+
+                particle.style.left = `${posX}%`;
+                particle.style.top = `${posY}%`;
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                particle.style.animation = `float ${duration}s ease-in-out ${delay}s infinite alternate`;
+
+                particlesContainer.appendChild(particle);
+            }
+        }
+
+        // Add floating animation for particles
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes float {
+            0% { transform: translateY(0) translateX(0); opacity: 0.3; }
+            50% { opacity: 0.7; }
+            100% { transform: translateY(-20px) translateX(10px); opacity: 0.3; }
+          }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize particles
+        createParticles();
+
+        const socket = io();
+        const STATE = { token: null, instances: new Map(), activeInstanceId: null };
+
+        const formatUptime = s => {
+            if (s === undefined) return 'N/A';
+            const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
+            const sec = Math.floor(s % 60);
+            return [d && `${d}d`, h && `${h}h`, m && `${m}m`, (!d && !h && sec) ? `${sec}s` : ''].filter(Boolean).join(' ');
+        };
+
+        socket.on('connect', () => {
+            updateConnectionStatus('connected', 'Connected');
+        });
+
+        socket.on('disconnect', () => {
+            updateConnectionStatus('disconnected', 'Disconnected');
+        });
+
+        function updateConnectionStatus(status, text) {
+            const statusEl = getEl('socket-status');
+            const textEl = getEl('socket-text');
+
+            statusEl.className = `connection-dot ${status}`;
+            textEl.textContent = text;
+        }
+
+        // Persistent login check
+        window.addEventListener('load', () => {
+            const savedToken = localStorage.getItem('monitorToken');
+            if (savedToken) {
+                STATE.token = savedToken;
+                socket.emit('authenticate', savedToken);
+                showDashboard();
+                loadInstances();
+            }
+        });
+
+        async function handleLogin() {
+            const username = getEl('username').value;
+            const password = getEl('password').value;
+            const msg = getEl('login-message');
+            const btn = getEl('login-button');
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loading-spinner"></div> Logging in...';
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+                if (data.token) {
+                    STATE.token = data.token;
+                    localStorage.setItem('monitorToken', data.token);
+                    socket.emit('authenticate', data.token);
+                    showDashboard();
+                    loadInstances();
+                } else {
+                    msg.textContent = data.error || 'Login failed';
+                    msg.classList.remove('hidden');
+                }
+            } catch {
+                msg.textContent = 'Connection error.';
+                msg.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
+            }
+        }
+
+        function logout() {
+            if (!confirm('Are you sure you want to log out?')) return;
+            localStorage.removeItem('monitorToken');
+            STATE.token = null;
+            getEl('dashboard').classList.add('hidden');
+            getEl('login-screen').classList.remove('hidden');
+            getEl('logout-btn').classList.add('hidden');
+            getEl('refresh-btn').classList.add('hidden');
+        }
+
+        function manualRefresh() {
+            loadInstances();
+        }
+
+        function showDashboard() {
+            getEl('login-screen').classList.add('hidden');
+            getEl('dashboard').classList.remove('hidden');
+            getEl('logout-btn').classList.remove('hidden');
+            getEl('refresh-btn').classList.remove('hidden');
+        }
+
+        async function loadInstances() {
+            const list = getEl('instance-list');
+            const loading = getEl('loading-indicator');
+            const empty = getEl('no-instances');
+
+            list.innerHTML = '';
+            loading.classList.remove('hidden');
+            empty.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/instances', {
+                    headers: { Authorization: `Bearer ${STATE.token}` }
+                });
+
+                loading.classList.add('hidden');
+
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+                }
+
+                const instances = await res.json();
+                if (!instances.length) {
+                    empty.classList.remove('hidden');
+                    return;
+                }
+
+                instances.forEach(renderInstanceCard);
+            } catch (e) {
+                list.innerHTML = `<div class="col-span-full text-center p-4 bg-red-900/20 text-red-300 rounded-lg border border-red-800">Error loading instances: ${e.message}</div>`;
+            }
+        }
+
+        function renderInstanceCard(inst) {
+            const container = getEl('instance-list');
+            if (!STATE.instances.has(inst.id)) {
+                STATE.instances.set(inst.id, { metrics: inst.metrics || {}, charts: {} });
+            }
+
+            const div = document.createElement('div');
+            div.className = 'instance-card rounded-xl p-5 fade-in';
+
+            // Use metrics.running if available, fallback to inst.running
+            const isRunning = (inst.metrics && inst.metrics.running !== undefined) ? inst.metrics.running : inst.running;
+            const statusClass = isRunning ? 'status-running' : 'status-stopped';
+            const statusText = isRunning ? 'Running' : 'Stopped';
+
+            div.innerHTML = `
+            <div class="card-header">
+              <h3 class="card-title">
+                <span class="status-indicator ${statusClass}"></span>
+                ${inst.id}
+              </h3>
+              <span class="text-sm text-gray-400">${statusText}</span>
+            </div>
+
+            <div class="card-stats">
+              <div class="stat-item">
+                <span class="stat-value" id="cpu-num-${inst.id}">0%</span>
+                <span class="stat-label">CPU Usage</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value" id="ram-num-${inst.id}">0 MB</span>
+                <span class="stat-label">RAM Usage</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value" id="uptime-${inst.id}">${formatUptime(inst.metrics?.uptime || inst.uptime)}</span>
+                <span class="stat-label">Uptime</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4">
+              <div class="chart-box">
+                <canvas id="cpuChart-${inst.id}"></canvas>
+              </div>
+              <div class="chart-box">
+                <canvas id="ramChart-${inst.id}"></canvas>
+              </div>
+            </div>
+
+            <div class="action-buttons">
+              <button onclick="viewLogs('${inst.id}')" class="btn btn-secondary">
+                <i class="fas fa-file-alt"></i>
+                Logs
+              </button>
+              ${inst.dbPath ?
+                    `<button onclick="editDB('${inst.id}')" class="btn btn-secondary">
+                  <i class="fas fa-database"></i>
+                  DB
+                </button>` :
+                    `<button class="btn btn-secondary" disabled>
+                  <i class="fas fa-database"></i>
+                  DB
+                </button>`
+                }
+              <button onclick="toggleInstance('${inst.id}')"
+                id="toggle-btn-${inst.id}"
+                class="btn ${isRunning ? 'btn-danger' : 'btn-success'}">
+                <i class="fas ${isRunning ? 'fa-stop' : 'fa-play'}"></i>
+                ${isRunning ? 'Stop' : 'Start'}
+              </button>
+              <button onclick="restartInstance('${inst.id}')" class="btn btn-warning">
+                <i class="fas fa-redo"></i>
+                Restart
+              </button>
+            </div>
+          `;
+
+            container.appendChild(div);
+            createCharts(inst.id);
+            if (inst.metrics) updateMetricsUI(inst.id, inst.metrics);
+        }
+
+        function createCharts(id) {
+            if (!STATE.instances.has(id)) {
+                STATE.instances.set(id, { metrics: {}, charts: {} });
+            } else if (!STATE.instances.get(id).charts) {
+                STATE.instances.get(id).charts = {};
+            }
+
+            const instData = STATE.instances.get(id);
+            const cpuCtx = getEl(`cpuChart-${id}`);
+            const ramCtx = getEl(`ramChart-${id}`);
+
+            // CPU Chart
+            const existingCpuChart = Chart.getChart(cpuCtx);
+            if (existingCpuChart) existingCpuChart.destroy();
+
+            instData.charts.cpu = new Chart(cpuCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'CPU Usage (%)',
+                            data: [],
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.4,
+                            fill: true,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { display: false }
+                        },
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: { size: 12, color: '#e2e8f0' },
+                            bodyFont: { size: 11, color: '#e2e8f0' },
+                            callbacks: {
+                                label: ctx => `${ctx.parsed.y.toFixed(1)}%`,
+                            },
+                        },
+                    },
+                },
+            });
+
+            // RAM Chart
+            const existingRamChart = Chart.getChart(ramCtx);
+            if (existingRamChart) existingRamChart.destroy();
+
+            instData.charts.ram = new Chart(ramCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'RAM Used (MB)',
+                            data: [],
+                            borderColor: '#06d6a0',
+                            backgroundColor: 'rgba(6, 214, 160, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.4,
+                            fill: true,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { display: false }
+                        },
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: { size: 12, color: '#e2e8f0' },
+                            bodyFont: { size: 11, color: '#e2e8f0' },
+                            callbacks: {
+                                label: ctx => `${ctx.parsed.y.toFixed(1)} MB`,
+                            },
+                        },
+                    },
+                },
+            });
+        }
+
+        function updateMetricsUI(id, metrics) {
+            const inst = STATE.instances.get(id);
+            if (!inst) return;
+
+            // Merge new metrics with existing ones to preserve uptime if not provided
+            if (inst.metrics && metrics.uptime === undefined) {
+                metrics.uptime = inst.metrics.uptime;
+            }
+
+            // Update the instance metrics
+            inst.metrics = { ...inst.metrics, ...metrics };
+
+            const uptimeEl = getEl(`uptime-${id}`);
+            const cpuNum = getEl(`cpu-num-${id}`);
+            const ramNum = getEl(`ram-num-${id}`);
+
+            // Update uptime display (keep format consistent with initial render)
+            if (uptimeEl) {
+                uptimeEl.textContent = formatUptime(inst.metrics.uptime);
+            }
+
+            // Safely default values
+            const cpuVal = inst.metrics.cpu !== undefined ? Number(inst.metrics.cpu.toFixed(1)) : 0;
+            const ramVal = inst.metrics.ram?.used !== undefined ? Number(inst.metrics.ram.used.toFixed(1)) : 0;
+
+            if (cpuNum) cpuNum.textContent = `${cpuVal}%`;
+            if (ramNum) ramNum.textContent = `${ramVal} MB`;
+
+            const { cpu, ram } = inst.charts;
+            const t = new Date().toLocaleTimeString();
+            const maxPts = 20;
+
+            if (cpu) {
+                cpu.data.labels.push(t);
+                cpu.data.datasets[0].data.push(cpuVal);
+                if (cpu.data.labels.length > maxPts) {
+                    cpu.data.labels.shift();
+                    cpu.data.datasets[0].data.shift();
+                }
+                cpu.update('none');
+            }
+
+            if (ram) {
+                ram.data.labels.push(t);
+                ram.data.datasets[0].data.push(ramVal);
+                if (ram.data.labels.length > maxPts) {
+                    ram.data.labels.shift();
+                    ram.data.datasets[0].data.shift();
+                }
+                ram.update('none');
+            }
+
+            // Update toggle button
+            if (inst.metrics.running !== undefined) {
+                const btn = getEl(`toggle-btn-${id}`);
+                if (btn) {
+                    btn.innerHTML = `<i class="fas ${inst.metrics.running ? 'fa-stop' : 'fa-play'}"></i> ${inst.metrics.running ? 'Stop' : 'Start'}`;
+                    btn.className = `btn ${inst.metrics.running ? 'btn-danger' : 'btn-success'}`;
+                }
+            }
+        }
+
+        socket.on('instanceUpdate', loadInstances);
+        socket.on('metricsUpdate', ({ id, metrics }) => updateMetricsUI(id, metrics));
+
+        async function restartInstance(id) {
+            if (!confirm(`Are you sure you want to restart ${id}?`)) return;
+
+            const btn = getEl(`toggle-btn-${id}`);
+            const originalHTML = btn ? btn.innerHTML : '';
+            if (btn) { btn.innerHTML = '<div class="loading-spinner"></div>'; btn.disabled = true; }
+
+            try {
+                const res = await fetch(`/api/restart/${id}`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${STATE.token}` }
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    // Reset uptime in local state when instance is restarted
+                    if (STATE.instances.has(id)) {
+                        const inst = STATE.instances.get(id);
+                        if (inst.metrics) {
+                            inst.metrics.uptime = 0;
+                            updateMetricsUI(id, inst.metrics);
+                        }
+                    }
+
+                    // Refresh instance list to reflect real state
+                    await loadInstances();
+                }
+
+                alert(data.message || (res.ok ? 'Instance restarted successfully' : 'Failed to restart instance'));
+            } catch (err) {
+                alert(`Error: ${err.message}`);
+            } finally {
+                if (btn) { btn.innerHTML = originalHTML; btn.disabled = false; }
+            }
+        }
+
+        async function viewLogs(id) {
+            STATE.activeInstanceId = id;
+            getEl('log-instance-id').textContent = id;
+            const log = getEl('log-data');
+            showModal('log-modal');
+
+            try {
+                const res = await fetch(`/api/logs/${id}`, {
+                    headers: { Authorization: `Bearer ${STATE.token}` }
+                });
+                const logs = await res.json();
+
+                if (logs.length) {
+                    const formattedLogs = logs.map(l => {
+                        const time = new Date(l.timestamp).toLocaleTimeString();
+                        const levelClass = `log-level-${l.level}`;
+                        return `<span class="${levelClass}">[${time}] [${l.level.toUpperCase()}]</span> ${l.message}`;
+                    }).join('\n');
+
+                    log.innerHTML = formattedLogs;
+                } else {
+                    log.textContent = 'No logs available for this instance.';
+                }
+            } catch {
+                log.textContent = 'Error loading logs. Please try again.';
+            }
+        }
+
+        // Enhanced editDB function (single definition)
+        async function editDB(id) {
+            STATE.activeInstanceId = id;
+            getEl('db-instance-id').textContent = id;
+            const area = getEl('db-editor');
+            showModal('db-modal');
+
+            // Reset editor state
+            DB_EDITOR_STATE.history = [];
+            DB_EDITOR_STATE.currentHistoryIndex = -1;
+
+            try {
+                const res = await fetch(`/api/db/${id}`, {
+                    headers: { Authorization: `Bearer ${STATE.token}` }
+                });
+                const db = await res.json();
+                const formattedJson = JSON.stringify(db, null, 2);
+                area.value = formattedJson;
+
+                // Initialize editor features
+                initializeDBEditor();
+                updateEditorStats();
+                addToHistory(formattedJson);
+
+            } catch {
+                area.value = 'Error loading database.';
+                initializeDBEditor();
+            }
+        }
+
+        // Initialize DB Editor features
+        function initializeDBEditor() {
+            const editor = getEl('db-editor');
+            const lineNumbers = getEl('editor-line-numbers');
+
+            // Remove existing listeners to avoid duplicates
+            editor.replaceWith(editor.cloneNode(true));
+            const newEditor = getEl('db-editor');
+
+            // Update line numbers and stats
+            newEditor.addEventListener('input', updateEditorStats);
+            newEditor.addEventListener('scroll', syncLineNumbersScroll);
+            newEditor.addEventListener('keydown', handleEditorKeydown);
+            newEditor.addEventListener('click', updateCursorPosition);
+            newEditor.addEventListener('keyup', updateCursorPosition);
+
+            // Initialize line numbers
+            updateLineNumbers();
+
+            // Set up toolbar buttons
+            setupEditorToolbar();
+        }
+
+        // Update editor statistics
+        function updateEditorStats() {
+            const editor = getEl('db-editor');
+            const lineCount = getEl('line-count');
+            const jsonSize = getEl('json-size');
+            const jsonStatus = getEl('json-status');
+
+            // Update line numbers
+            updateLineNumbers();
+
+            // Update size
+            const size = new Blob([editor.value]).size;
+            jsonSize.textContent = `Size: ${size} bytes`;
+
+            // Validate JSON
+            try {
+                JSON.parse(editor.value);
+                jsonStatus.textContent = '✓ Valid JSON';
+                jsonStatus.className = 'text-xs text-green-400';
+            } catch (e) {
+                jsonStatus.textContent = '✗ Invalid JSON';
+                jsonStatus.className = 'text-xs text-red-400';
+            }
+
+            // Add to history if changed
+            addToHistory(editor.value);
+        }
+
+        // Update line numbers
+        function updateLineNumbers() {
+            const editor = getEl('db-editor');
+            const lineNumbers = getEl('editor-line-numbers');
+            const lines = editor.value.split('\n').length;
+
+            let numbersHTML = '';
+            for (let i = 1; i <= lines; i++) {
+                numbersHTML += `<div class="px-2 py-0.5">${i}</div>`;
+            }
+            lineNumbers.innerHTML = numbersHTML;
+        }
+
+        // Sync line numbers scroll with editor
+        function syncLineNumbersScroll() {
+            const editor = getEl('db-editor');
+            const lineNumbers = getEl('editor-line-numbers');
+            lineNumbers.scrollTop = editor.scrollTop;
+        }
+
+        // Update cursor position display
+        function updateCursorPosition() {
+            const editor = getEl('db-editor');
+            const lineCount = getEl('line-count');
+
+            const cursorPosition = editor.selectionStart;
+            const textUpToCursor = editor.value.substring(0, cursorPosition);
+            const currentLine = textUpToCursor.split('\n').length;
+            const currentColumn = textUpToCursor.split('\n').pop().length + 1;
+
+            lineCount.textContent = `Line: ${currentLine}, Col: ${currentColumn}`;
+        }
+
+        // Handle editor keyboard shortcuts
+        function handleEditorKeydown(e) {
+            // Ctrl/Cmd + S to save
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                saveDB();
+            }
+
+            // Ctrl/Cmd + F to find
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                toggleFindPanel();
+            }
+
+            // Tab key for indentation
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                insertTab();
+            }
+        }
+
+        // Insert tab character
+        function insertTab() {
+            const editor = getEl('db-editor');
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+
+            editor.value = editor.value.substring(0, start) + '  ' + editor.value.substring(end);
+            editor.selectionStart = editor.selectionEnd = start + 2;
+            updateEditorStats();
+        }
+
+        // Setup editor toolbar
+        function setupEditorToolbar() {
+            // Remove previous listeners to avoid duplicates
+            getEl('format-json').replaceWith(getEl('format-json').cloneNode(true));
+            getEl('minify-json').replaceWith(getEl('minify-json').cloneNode(true));
+            getEl('find-replace-btn').replaceWith(getEl('find-replace-btn').cloneNode(true));
+            getEl('close-find').replaceWith(getEl('close-find').cloneNode(true));
+            getEl('find-next').replaceWith(getEl('find-next').cloneNode(true));
+            getEl('find-prev').replaceWith(getEl('find-prev').cloneNode(true));
+            getEl('replace-btn').replaceWith(getEl('replace-btn').cloneNode(true));
+            getEl('replace-all-btn').replaceWith(getEl('replace-all-btn').cloneNode(true));
+            getEl('json-history-btn').replaceWith(getEl('json-history-btn').cloneNode(true));
+            getEl('close-history').replaceWith(getEl('close-history').cloneNode(true));
+
+            // Format JSON
+            getEl('format-json').addEventListener('click', () => {
+                const editor = getEl('db-editor');
+                try {
+                    const parsed = JSON.parse(editor.value);
+                    editor.value = JSON.stringify(parsed, null, 2);
+                    updateEditorStats();
+                } catch (e) {
+                    showMessage('Invalid JSON format', 'error');
+                }
+            });
+
+            // Minify JSON
+            getEl('minify-json').addEventListener('click', () => {
+                const editor = getEl('db-editor');
+                try {
+                    const parsed = JSON.parse(editor.value);
+                    editor.value = JSON.stringify(parsed);
+                    updateEditorStats();
+                } catch (e) {
+                    showMessage('Invalid JSON format', 'error');
+                }
+            });
+
+            // Find/Replace functionality
+            setupFindReplace();
+
+            // History functionality
+            setupHistory();
+        }
+
+        // Find/Replace functionality
+        function setupFindReplace() {
+            const findBtn = getEl('find-replace-btn');
+            const closeFind = getEl('close-find');
+
+            findBtn.addEventListener('click', () => toggleFindPanel());
+            closeFind.addEventListener('click', () => toggleFindPanel(false));
+
+            // Find next/previous
+            getEl('find-next').addEventListener('click', findNext);
+            getEl('find-prev').addEventListener('click', findPrev);
+            getEl('replace-btn').addEventListener('click', replaceCurrent);
+            getEl('replace-all-btn').addEventListener('click', replaceAll);
+        }
+
+        function toggleFindPanel(show = true) {
+            const findPanel = getEl('find-replace-panel');
+            const historyPanel = getEl('json-history-panel');
+
+            if (show) {
+                findPanel.classList.remove('hidden');
+                historyPanel.classList.add('hidden');
+                getEl('find-input').focus();
+            } else {
+                findPanel.classList.add('hidden');
+            }
+        }
+
+        function findNext() {
+            performFind(false);
+        }
+
+        function findPrev() {
+            performFind(true);
+        }
+
+        function performFind(backward = false) {
+            const editor = getEl('db-editor');
+            const findInput = getEl('find-input');
+            const searchText = findInput.value;
+
+            if (!searchText) return;
+
+            let startPos = editor.selectionStart;
+            if (backward) {
+                startPos = editor.selectionStart - 1;
+            }
+
+            const content = editor.value;
+            let index;
+
+            if (backward) {
+                index = content.lastIndexOf(searchText, startPos);
+            } else {
+                index = content.indexOf(searchText, startPos);
+            }
+
+            if (index !== -1) {
+                editor.focus();
+                editor.setSelectionRange(index, index + searchText.length);
+                updateCursorPosition();
+            }
+        }
+
+        function replaceCurrent() {
+            const editor = getEl('db-editor');
+            const findInput = getEl('find-input');
+            const replaceInput = getEl('replace-input');
+
+            if (editor.selectionStart !== editor.selectionEnd) {
+                const selectedText = editor.value.substring(editor.selectionStart, editor.selectionEnd);
+                if (selectedText === findInput.value) {
+                    editor.value = editor.value.substring(0, editor.selectionStart) +
+                        replaceInput.value +
+                        editor.value.substring(editor.selectionEnd);
+                    editor.selectionStart = editor.selectionEnd = editor.selectionStart + replaceInput.value.length;
+                    updateEditorStats();
+                }
+            }
+            findNext();
+        }
+
+        function replaceAll() {
+            const editor = getEl('db-editor');
+            const findInput = getEl('find-input');
+            const replaceInput = getEl('replace-input');
+
+            const regex = new RegExp(findInput.value, 'g');
+            editor.value = editor.value.replace(regex, replaceInput.value);
+            updateEditorStats();
+        }
+
+        // History functionality
+        function setupHistory() {
+            const historyBtn = getEl('json-history-btn');
+            const closeHistory = getEl('close-history');
+
+            historyBtn.addEventListener('click', () => toggleHistoryPanel());
+            closeHistory.addEventListener('click', () => toggleHistoryPanel(false));
+        }
+
+        function toggleHistoryPanel(show = true) {
+            const historyPanel = getEl('json-history-panel');
+            const findPanel = getEl('find-replace-panel');
+
+            if (show) {
+                historyPanel.classList.remove('hidden');
+                findPanel.classList.add('hidden');
+                updateHistoryList();
+            } else {
+                historyPanel.classList.add('hidden');
+            }
+        }
+
+        function addToHistory(content) {
+            if (DB_EDITOR_STATE.history[DB_EDITOR_STATE.history.length - 1] !== content) {
+                DB_EDITOR_STATE.history.push(content);
+                DB_EDITOR_STATE.currentHistoryIndex = DB_EDITOR_STATE.history.length - 1;
+
+                // Keep only last 10 history items
+                if (DB_EDITOR_STATE.history.length > 10) {
+                    DB_EDITOR_STATE.history.shift();
+                    DB_EDITOR_STATE.currentHistoryIndex--;
+                }
+            }
+        }
+
+        function updateHistoryList() {
+            const historyList = getEl('history-list');
+            historyList.innerHTML = '';
+
+            DB_EDITOR_STATE.history.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = `p-2 mb-1 rounded cursor-pointer text-xs ${index === DB_EDITOR_STATE.currentHistoryIndex
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-slate-700 hover:bg-slate-600'
+                    }`;
+                div.textContent = `Version ${index + 1} - ${new Date().toLocaleTimeString()}`;
+                div.addEventListener('click', () => restoreFromHistory(index));
+                historyList.appendChild(div);
+            });
+        }
+
+        function restoreFromHistory(index) {
+            const editor = getEl('db-editor');
+            editor.value = DB_EDITOR_STATE.history[index];
+            DB_EDITOR_STATE.currentHistoryIndex = index;
+            updateEditorStats();
+            updateHistoryList();
+        }
+
+        // JSON Snippets
+        function insertJsonSnippet(type) {
+            const editor = getEl('db-editor');
+            const snippets = {
+                object: '{\n  "key": "value"\n}',
+                array: '[\n  "item1",\n  "item2"\n]',
+                string: '"text"',
+                number: '42',
+                boolean: 'true',
+                null: 'null'
+            };
+
+            const snippet = snippets[type];
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+
+            editor.value = editor.value.substring(0, start) + snippet + editor.value.substring(end);
+            editor.selectionStart = editor.selectionEnd = start + snippet.length;
+            editor.focus();
+            updateEditorStats();
+        }
+
+        // Validate JSON
+        function validateJSON() {
+            const editor = getEl('db-editor');
+            try {
+                JSON.parse(editor.value);
+                showMessage('JSON is valid!', 'success');
+            } catch (e) {
+                showMessage(`JSON Error: ${e.message}`, 'error');
+            }
+        }
+
+        // Enhanced saveDB function (single definition)
+        async function saveDB() {
+            const id = STATE.activeInstanceId;
+            const data = getEl('db-editor').value;
+            const btn = getEl('save-db-button');
+            const msg = getEl('db-message');
+
+            // Validate JSON first
+            try {
+                JSON.parse(data);
+            } catch (err) {
+                showMessage('Cannot save: Invalid JSON format', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loading-spinner"></div> Saving...';
+
+            try {
+                const parsedData = JSON.parse(data);
+                const res = await fetch(`/api/db/${id}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${STATE.token}`
+                    },
+                    body: JSON.stringify(parsedData)
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    showMessage('Database updated successfully!', 'success');
+                } else {
+                    showMessage(result.error || 'Failed to update database', 'error');
+                }
+            } catch (err) {
+                showMessage('Error saving database: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Changes';
+            }
+        }
+
+        // Helper function to show messages
+        function showMessage(text, type) {
+            const msg = getEl('db-message');
+            msg.textContent = text;
+            msg.className = `mb-4 p-3 text-sm rounded-lg border ${type === 'success'
+                    ? 'text-green-300 bg-green-900/30 border-green-800'
+                    : 'text-red-300 bg-red-900/30 border-red-800'
+                }`;
+            msg.classList.remove('hidden');
+
+            setTimeout(() => {
+                msg.classList.add('hidden');
+            }, 5000);
+        }
+
+        async function toggleInstance(id) {
+            const btn = getEl(`toggle-btn-${id}`);
+            if (!btn) return;
+
+            const isRunning = btn.textContent.trim() === 'Stop';
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loading-spinner"></div>';
+
+            try {
+                const endpoint = isRunning ? `/api/stop/${id}` : `/api/start/${id}`;
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${STATE.token}` }
+                });
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data.error || 'Unknown error');
+
+                // Reset uptime in local state when instance is stopped/started
+                if (STATE.instances.has(id)) {
+                    const inst = STATE.instances.get(id);
+                    if (inst.metrics) {
+                        // Reset uptime to 0 when stopping, or keep at 0 when starting
+                        inst.metrics.uptime = 0;
+                        // Update the UI immediately
+                        updateMetricsUI(id, inst.metrics);
+                    }
+                }
+
+                // Refresh instance list to reflect real state
+                await loadInstances();
+            } catch (err) {
+                alert(`Failed: ${err.message}`);
+            }
+        }
+
+        function showAddInstanceModal() {
+            showModal('add-instance-modal');
+        }
+
+        async function addInstance() {
+            // This is a placeholder function - implementation would depend on your backend API
+            alert('Add instance functionality would be implemented here');
+            closeModal('add-instance-modal');
+        }
+
+        function showModal(id) {
+            const m = getEl(id);
+            m.classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            const m = getEl(id);
+            m.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Student Portal — Login & Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+  <style>
+    /* 1. Refined Color Palette & Typography */
+    :root{
+      --bg-dark:#0f172a; /* Darker background */
+      --bg-medium:#1e293b; /* Card background */
+      --bg-light:#334155; /* Interactive/Hover background */
+      --text-main:#e2e8f0; /* Near-white text */
+      --text-muted:#94a3b8; /* Muted text */
+      --border-subtle:#374151; /* Subtle border */
+      --accent-main:#3b82f6; /* Blue for primary action */
+      --accent-success:#10b981; /* Green for success/good grades */
+      --accent-warning:#f59e0b; /* Orange for attendance/notices */
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.3);
+    }
+    *{box-sizing:border-box;font-family:'Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    html,body,#app{
+      height:100%;margin:0;
+      background:var(--bg-dark);
+      color:var(--text-main);
+      line-height:1.5;
+    }
+    .container{max-width:1200px;margin:32px auto;padding:0 24px;}
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;padding-top:8px;}
+    .logo{display:flex;gap:10px;align-items:center}
+    .logo .badge{
+      background:linear-gradient(90deg,var(--accent-main),#60a5fa);
+      padding:8px 12px;border-radius:6px;
+      font-weight:800;font-size:16px;
+      color:#0f172a;
+      box-shadow:0 2px 8px rgba(59,130,246,0.3);
+    }
+  /* utility classes to replace inline styles used in templates */
+  .fw-700{font-weight:700}
+  .fw-800{font-weight:800}
+  .fs-22{font-size:22px}
+  .mt-8{margin-top:8px}
+  .mt-10{margin-top:10px}
+  .mt-16{margin-top:16px}
+  .mt-20{margin-top:20px}
+  .gap-12{gap:12px}
+  .flex{display:flex}
+  .flex-1{flex:1}
+  .col{flex-direction:column}
+  .p-16{padding:16px}
+  .mb-12{margin-bottom:12px}
+  .fs-16{font-size:16px}
+  .card-dark{background-color:var(--bg-dark)}
+  .radius-8{border-radius:8px}
+  .announcement-img{max-width:100%;margin-top:8px;border-radius:8px;display:block}
+  .download-btn{display:inline-block;background:var(--accent-main);color:var(--bg-dark);padding:8px 12px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 6px rgba(59,130,246,0.4)}
+  .mt-0{margin-top:0}
+  .mt-6{margin-top:6px}
+  .gap-10{gap:10px}
+  .gap-20{gap:20px}
+  .p-12{padding:12px}
+  .p-40-30{padding:40px 30px}
+  .w-100{width:100%}
+  .w-300{width:300px}
+  .items-center{align-items:center}
+  .items-start{align-items:flex-start}
+  .mb-20{margin-bottom:20px}
+  .mt-12{margin-top:12px}
+  .hidden{display:none}
+  .error{color:#ff6b6b;font-weight:500}
+  .announcement{background:rgba(59,130,246,0.08);border-left:4px solid var(--accent-main)}
+    h1{margin:0;font-size:24px;font-weight:700;}
+    .muted{color:var(--text-muted)}
+
+    /* 2. Modernized Card and Layout */
+    .card{
+      background-color:var(--bg-medium);
+      border:1px solid var(--border-subtle);
+      padding:24px;
+      border-radius:12px;
+      box-shadow:var(--shadow-lg);
+      transition:box-shadow 0.3s ease;
+    }
+    .card:hover{
+      box-shadow:0 15px 35px rgba(0,0,0,0.4);
+    }
+    .grid{display:grid;grid-template-columns:380px 1fr;gap:24px;}
+    .center{display:flex;align-items:center;justify-content:center}
+    .small{font-size:14px}
+
+    /* 3. Form Refinements (Robustness) */
+    .field{margin-bottom:16px}
+    label{display:block;font-size:12px;margin-bottom:6px;color:var(--text-muted);font-weight:500;}
+    input[type="text"],input[type="password"],input[type="email"]{
+      width:100%;
+      padding:12px 14px;
+      border-radius:8px;
+      border:1px solid var(--border-subtle);
+      background-color:var(--bg-dark);
+      color:var(--text-main);
+      transition:border-color 0.2s, background-color 0.2s;
+    }
+    input:focus{
+      border-color:var(--accent-main);
+      outline:none;
+      background-color:#1e293ba6;
+    }
+    button{
+      padding:12px 18px;
+      border-radius:8px;
+      border:0;
+      font-weight:600;
+      cursor:pointer;
+      transition:background 0.2s, opacity 0.2s, box-shadow 0.2s;
+    }
+    button:disabled{
+      opacity:0.5;
+      cursor:not-allowed;
+    }
+    .btn-primary{
+      background:var(--accent-main);
+      color:var(--bg-dark);
+      box-shadow:0 2px 10px rgba(59,130,246,0.4);
+    }
+    .btn-primary:hover{
+      background:linear-gradient(90deg,var(--accent-main),#60a5fa);
+    }
+    .btn-ghost{
+      background-color:var(--bg-medium);
+      border:1px solid var(--border-subtle);
+      color:var(--accent-main);
+    }
+    .btn-ghost:hover{
+      background-color:var(--bg-light);
+    }
+    .btn-ghost.small{padding:8px 12px;font-size:14px;}
+
+    /* Dashboard */
+    .dashboard-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+    .stat{
+      padding:16px;
+      border-radius:10px;
+      background-color:var(--bg-dark);
+      border:1px solid var(--border-subtle);
+    }
+    .stat-value{
+      font-weight:800;
+      font-size:28px;
+      margin-top:4px;
+      color:var(--accent-success); /* Use success for main stats */
+    }
+    #attendancePct .stat-value{color:var(--accent-warning);}
+
+    .subject-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+    .subject-item{
+      padding:10px;
+      border-radius:6px;
+      background-color:rgba(59, 130, 246, 0.08); /* Subtle accent background */
+      border:1px solid rgba(59, 130, 246, 0.2);
+      font-size:14px;
+      font-weight:500;
+      color:var(--text-main);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    /* Table (Robustness & Professionalism) */
+    table{width:100%;border-collapse:collapse;}
+    th,td{
+      padding:12px 8px;
+      text-align:left;
+      border-bottom:1px solid var(--border-subtle);
+      font-size:14px;
+    }
+    th{
+      color:var(--text-muted);
+      font-weight:600;
+      text-transform:uppercase;
+      font-size:12px;
+      letter-spacing:0.5px;
+    }
+    tbody tr:last-child td{border-bottom:none;}
+    tbody tr:nth-child(even){background-color:rgba(255,255,255,0.01);} /* Subtle striping */
+
+    .notice{
+      padding:12px;
+      background-color:rgba(245, 158, 11, 0.08);
+      border-left:4px solid var(--accent-warning);
+      border-radius:6px;
+      color:var(--text-muted);
+      font-size:14px;
+    }
+
+    footer{margin-top:30px;padding:16px 0;text-align:center;color:var(--text-muted);font-size:13px;border-top:1px solid var(--border-subtle);}
+
+    /* Responsive adjustments (Robustness) */
+    @media (max-width:1024px){
+      .grid{grid-template-columns:1fr; gap:32px;}
+    }
+    @media (max-width:768px){
+      .cards{grid-template-columns:repeat(2,1fr);}
+    }
+    @media (max-width:480px){
+      .cards{grid-template-columns:1fr;}
+      .topbar{flex-direction:column; gap:12px; align-items:flex-start;}
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="container">
+      <div class="topbar">
+        <div class="logo"><div class="badge">SP</div><div><div class="fw-700">Student Portal</div><div class="muted small">Secure grades & attendance</div></div></div>
+        <div class="muted small">Identity Labs</div>
+      </div>
+
+      <div class="grid">
+        <div class="card" id="authCard">
+          <div id="stepArea">
+            <div id="stepId">
+              <h1>Sign in or create account</h1>
+              <p class="muted">Enter your Student ID to begin (e.g., ST1234)</p>
+              <div class="field">
+                <label for="studentId">Student ID</label>
+                <input id="studentId" type="text" placeholder="ST1234" />
+              </div>
+              <div class="flex gap-12 mt-20">
+                <button id="btnCheck" class="btn-primary flex-1">Continue</button>
+              </div>
+              <p class="muted small mt-16">We check your record. If registered, you'll log in; otherwise, you'll create a password for this student ID.</p>
+              <div id="idError" class="muted error hidden mt-16"></div>
+            </div>
+
+            <div id="stepRegister" class="hidden">
+              <h1>Create account</h1>
+              <p class="muted">Student: <span id="regStudentName" class="fw-700"></span> (<span id="regStudentId" class="fw-700"></span>)</p>
+              <div class="field"><label for="regPassword">Choose password</label><input id="regPassword" type="password" placeholder="Minimum 6 characters" /></div>
+              <div class="field"><label for="regConfirm">Confirm password</label><input id="regConfirm" type="password" placeholder="Confirm" /></div>
+              <div class="flex gap-12 mt-20"><button id="btnRegister" class="btn-primary flex-1">Create Account</button><button id="btnBackToId" class="btn-ghost">Back</button></div>
+              <div id="regError" class="muted error hidden mt-16"></div>
+            </div>
+
+            <div id="stepLogin" class="hidden">
+              <h1>Login</h1>
+              <p class="muted">Student: <span id="loginStudentName" class="fw-700"></span> (<span id="loginStudentId" class="fw-700"></span>)</p>
+              <div class="field"><label for="loginPassword">Password</label><input id="loginPassword" type="password" placeholder="Your password" /></div>
+              <div class="flex gap-12 mt-20"><button id="btnLogin" class="btn-primary flex-1">Login</button><button id="btnBackToId2" class="btn-ghost">Back</button></div>
+              <div id="loginError" class="muted error hidden mt-16"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card" id="mainCard">
+          <div id="welcome" class="center col p-40-30">
+            <div class="fs-22 fw-700">Welcome to the Student Portal</div>
+            <div class="muted mt-10">Securely sign in to view your academic reports.</div>
+            <div class="mt-20 w-100" id="afterLogin" hidden>
+              <div class="dashboard-head">
+                <div>
+                  <div class="fw-800 fs-20" id="studentFullName"></div>
+                  <div class="muted small" id="studentMeta"></div>
+                </div>
+                <div class="flex gap-10 items-center">
+                  <button id="btnRefresh" class="btn-ghost small">Refresh</button>
+                  <button id="btnLogout" class="btn-ghost small">Logout</button>
+                </div>
+              </div>
+
+              <div class="cards">
+                <div class="stat" id="avgScoreStat"><div class="muted small">Average Grade</div><div class="stat-value" id="avgScore">--</div><div class="muted small">Across all subjects</div></div>
+               
+                <div class="stat" id="totalRecordsStat"><div class="muted small">Total Records</div><div class="stat-value" id="totalRecords">--</div><div class="muted small">Grades + attendance</div></div>
+
+                
+
+              </div>
+
+              <!-- ✅ Announcements section -->
+                <div class="card" id="announcementsCard" hidden>
+                <h2 class="mt-0">📢 Announcements</h2>
+                <div id="announcementsList" class="notice radius-8 p-12">
+                <p class="muted small">No announcements yet.</p>
+              </div>
+            </div>
+
+              <div class="flex gap-20 items-start">
+                <div class="flex-1">
+                  <div class="card p-16 card-dark mb-20">
+                    <div class="fw-700 mb-12 fs-16">Latest Grades</div>
+                    <div id="gradesArea"><div class="muted small">No grades loaded</div></div>
+                  </div>
+
+                  <div class="card p-16 card-dark">
+                    <div class="fw-700 mb-12 fs-16">Recent Attendance</div>
+                    <div id="attendanceArea"><div class="muted small">No attendance loaded</div></div>
+                  </div>
+                </div>
+
+                <div class="w-300 flex col gap-20">
+                  <div class="card p-16 card-dark">
+                    <div class="fw-700 mb-12 fs-16">Active Subjects</div>
+                    <div id="subjectsArea" class="subject-list"><div class="muted small">No subjects</div></div>
+                  </div>
+
+                  <div class="card p-16 card-dark">
+                    <div class="fw-700 mb-12 fs-16">Notices</div>
+                    <div class="notice" id="notices">No new notices from the administration.</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="muted">Copyright @ 2025 </footer>
+    </div>
+  </div>
+
+  <script>
+    // The JavaScript logic remains the same for functionality, 
+    // but the selectors and render functions might need minor 
+    // adjustments if you change the HTML structure of the 
+    // dashboard. For this CSS update, the JS is mostly compatible.
+    const API_BASE = ''; // same origin; server serves /api
+
+    // helpers
+    function qs(id){return document.getElementById(id)}
+    function show(el){el.style.display='block'}
+    function hide(el){el.style.display='none'}
+
+    // initial UI refs
+    const studentIdInput = qs('studentId');
+    const btnCheck = qs('btnCheck');
+    const btnDemo = qs('btnDemo');
+    const idError = qs('idError');
+
+    const stepId = qs('stepId');
+    const stepRegister = qs('stepRegister');
+    const stepLogin = qs('stepLogin');
+
+    const regStudentName = qs('regStudentName');
+    const regStudentId = qs('regStudentId');
+    const regPassword = qs('regPassword');
+    const regConfirm = qs('regConfirm');
+    const btnRegister = qs('btnRegister');
+    const btnBackToId = qs('btnBackToId');
+    const regError = qs('regError');
+
+    const loginStudentName = qs('loginStudentName');
+    const loginStudentId = qs('loginStudentId');
+    const loginPassword = qs('loginPassword');
+    const btnLogin = qs('btnLogin');
+    const btnBackToId2 = qs('btnBackToId2');
+    const loginError = qs('loginError');
+
+    const afterLogin = qs('afterLogin');
+    const studentFullName = qs('studentFullName');
+    const studentMeta = qs('studentMeta');
+    const avgScore = qs('avgScore');
+    const attendancePct = qs('attendancePct');
+    const totalRecords = qs('totalRecords');
+    const gradesArea = qs('gradesArea');
+    const attendanceArea = qs('attendanceArea');
+    const subjectsArea = qs('subjectsArea');
+    const notices = qs('notices');
+    const btnLogout = qs('btnLogout');
+    const btnRefresh = qs('btnRefresh');
+
+    // state
+    let currentStudent = null;
+    let token = localStorage.getItem('sp_token') || null;
+
+    function showError(el,msg){el.textContent=msg;el.style.display='block'}
+    function clearErrors(){[idError,regError,loginError].forEach(e=>{e.style.display='none';e.textContent=''});} 
+
+  
+    // Step: check student id
+    btnCheck.addEventListener('click', async ()=>{
+      clearErrors();
+      const id = (studentIdInput.value||'').trim().toUpperCase();
+      if(!/^ST-?\d{1,}$/i.test(id)){showError(idError,'Invalid Student ID format. Example: ST1234');return}
+      try{
+        // We'll call the server-side "check" endpoint to learn whether student exists & has password
+        const res = await fetch(`/api/auth/check/${encodeURIComponent(id)}`);
+        if(res.status===404){showError(idError,'Student ID not found. Please contact admin.');return}
+        if(!res.ok){const j=await res.json().catch(()=>({}));showError(idError,j.error||'Server error');return}
+        const body = await res.json();
+        // Response: { exists:true, student:{...}, hasPassword: true/false }
+        if(body.hasPassword){
+          // show login
+          loginStudentName.textContent = body.student.name || 'Unknown';
+          loginStudentId.textContent = body.student.studentId;
+          stepId.style.display='none'; stepLogin.style.display='block'; stepRegister.style.display='none';
+          currentStudent = body.student;
+        } else {
+          regStudentName.textContent = body.student.name || 'Unknown';
+          regStudentId.textContent = body.student.studentId;
+          stepId.style.display='none'; stepRegister.style.display='block'; stepLogin.style.display='none';
+          currentStudent = body.student;
+        }
+      }catch(err){console.error(err);showError(idError,'Network error or API not reachable');}
+    });
+
+    // Back buttons
+    btnBackToId.addEventListener('click',()=>{stepRegister.style.display='none'; stepId.style.display='block';});
+    btnBackToId2.addEventListener('click',()=>{stepLogin.style.display='none'; stepId.style.display='block';});
+
+    // Register
+    btnRegister.addEventListener('click',async ()=>{
+      regError.style.display='none';
+      const p = regPassword.value||''; const c = regConfirm.value||'';
+      if(p.length<6){showError(regError,'Password should be at least 6 characters');return}
+      if(p!==c){showError(regError,'Passwords do not match');return}
+      try{
+        const res = await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId: currentStudent.studentId, password: p, name: currentStudent.name})});
+        const j = await res.json();
+        if(!res.ok){showError(regError,j.error||'Registration failed');return}
+        alert('Registration complete — please login now');
+        stepRegister.style.display='none'; stepLogin.style.display='block';
+        loginStudentName.textContent = currentStudent.name||'Unknown'; loginStudentId.textContent=currentStudent.studentId;
+      }catch(err){console.error(err);showError(regError,'Network error')}
+    });
+
+    // Login
+    btnLogin.addEventListener('click',async ()=>{
+      loginError.style.display='none';
+      const p = loginPassword.value||'';
+      if(p.length<1){showError(loginError,'Enter password');return}
+      try{
+        const res = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId: currentStudent.studentId, password: p})});
+        const j = await res.json();
+        if(!res.ok){showError(loginError,j.error||'Login failed');return}
+        token = j.token; localStorage.setItem('sp_token', token); loadProfile();
+      }catch(err){console.error(err);showError(loginError,'Network error')}
+    });
+
+    btnLogout.addEventListener('click',()=>{token=null;localStorage.removeItem('sp_token');location.reload();});
+    btnRefresh.addEventListener('click',()=>{loadProfile(true)});
+
+    // profile and data
+    async function loadProfile(force=false){
+      if(!token){return}
+      // show loading
+      afterLogin.hidden=false; qs('welcome').classList.add('loading');
+      try{
+        const headers = { 'Authorization': 'Bearer '+token };
+        const resProfile = await fetch('/api/me', { headers });
+        if(resProfile.status===401){alert('Session expired. Please login again.'); localStorage.removeItem('sp_token'); location.reload(); return}
+        const profile = await resProfile.json();
+        if(!profile.ok){alert('Failed to load profile'); return}
+        const s = profile.student; currentStudent = s;
+        studentFullName.textContent = s.name || s.studentId; studentMeta.textContent = `ID: ${s.studentId} • Class: ${s.class || 'N/A'}`;
+
+
+    loadAnnouncements(s.studentId);
+
+        // grades
+        const resGrades = await fetch('/api/grades',{ headers });
+        const gjson = await resGrades.json();
+        if(gjson.ok){renderGrades(gjson.grades)}
+        // attendance
+        const resAtt = await fetch('/api/attendance',{ headers });
+        const ajson = await resAtt.json();
+        if(ajson.ok){renderAttendance(ajson.attendance)}
+        qs('welcome').classList.remove('loading'); // hide loading when done
+
+      }catch(err){console.error(err);}
+    }
+
+
+    function renderGrades(grades){
+      if(!grades || grades.length===0){gradesArea.innerHTML='<div class="muted small">No grades available</div>'; avgScore.textContent='--'; totalRecords.textContent='0'; subjectsArea.innerHTML='<div class="muted small">No subjects</div>'; return}
+      const subjects = {};
+      grades.forEach(g=>{subjects[g.subject]=subjects[g.subject]||[]; subjects[g.subject].push(g)});
+      // compute average
+      const avg = grades.reduce((s,g)=>s+Number(g.score||0),0)/grades.length;
+      avgScore.textContent = Math.round(avg*100)/100;
+      totalRecords.textContent = (grades.length);
+      // subjects
+      subjectsArea.innerHTML=''; 
+      for(const sub in subjects){ 
+        const el=document.createElement('div'); 
+        el.classList.add('subject-item');
+        el.textContent=`${sub} (${subjects[sub].length})`; 
+        subjectsArea.appendChild(el)
+      }
+      // table of latest
+      const rows = grades.slice(0,20).map(g=>`<tr><td>${g.subject}</td><td>${g.score}</td><td>${g.purpose||'-'}</td><td>${new Date(g.date||'').toLocaleDateString()}</td></tr>`).join('');
+      gradesArea.innerHTML = `<table><thead><tr><th>Subject</th><th>Score</th><th>Purpose</th><th>Date</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function renderAttendance(att){
+      if(!att || att.length===0){attendanceArea.innerHTML='<div class="muted small">No attendance records</div>'; attendancePct.textContent='--'; return}
+      // compute presence percentage
+      let present=0, total=0;
+      const rows = att.map(a=>{ 
+        const s=a.status||'unknown'; total++; 
+        if(s.toLowerCase()==='present') present++; 
+        return `<tr><td>${new Date(a.date||'').toLocaleDateString()}</td><td>${a.subject||a.className||'-'}</td><td>${s}</td></tr>`
+      }).join('');
+      attendanceArea.innerHTML = `<table><thead><tr><th>Date</th><th>Subject/Class</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    // auto-login if token present
+    if(token){loadProfile()}
+
+   
+
+    async function loadAnnouncements(studentId) {
+  try {
+    const res = await fetch(`/api/announcements?studentId=${encodeURIComponent(studentId)}`);
+    const data = await res.json();
+    const announcements = data.announcements;
+
+    const list = document.getElementById('announcementsList');
+    const card = document.getElementById('announcementsCard');
+    list.innerHTML = ''; // Clear previous items
+
+    if (!announcements || announcements.length === 0) {
+      list.innerHTML = '<p class="muted small">No announcements yet.</p>';
+      card.hidden = false;
+      return;
+    }
+
+    // ✅ Make the list scrollable if more than 5 announcements
+    if (announcements.length > 5) {
+      list.style.maxHeight = '400px';
+      list.style.overflowY = 'auto';
+      list.style.scrollbarWidth = 'thin';
+    } else {
+      list.style.maxHeight = 'unset';
+      list.style.overflowY = 'visible';
+    }
+
+    // ✅ Build announcement list (DOM-based, no inline styles)
+    for (const a of announcements) {
+      const div = document.createElement('div');
+      div.className = 'notice announcement radius-8 p-12';
+      div.classList.add('mb-20');
+
+      const header = document.createElement('div');
+      const teacher = document.createElement('strong');
+      teacher.textContent = a.teacherName || 'Staff';
+      header.appendChild(teacher);
+
+      const meta = document.createElement('span');
+      meta.className = 'muted small';
+      meta.textContent = ` (${a.type || 'General'}: ${a.target || 'All'})`;
+      header.appendChild(meta);
+
+      div.appendChild(header);
+
+      if (a.text) {
+        const body = document.createElement('div');
+        body.innerHTML = a.text;
+        body.className = 'mt-8';
+        div.appendChild(body);
+      }
+
+      if (a.mediaUrl) {
+        const type = a.mediaType || '';
+        if (type === 'photo') {
+          const img = document.createElement('img');
+          img.src = a.mediaUrl;
+          img.alt = 'Announcement Photo';
+          img.className = 'announcement-img';
+          div.appendChild(img);
+        } else {
+          const wrap = document.createElement('div');
+          wrap.className = 'mt-8';
+          const aLink = document.createElement('a');
+          aLink.href = a.mediaUrl;
+          aLink.target = '_blank';
+          aLink.download = '';
+          aLink.className = 'download-btn';
+          aLink.textContent = `⬇️ Download ${type || 'file'}`;
+          wrap.appendChild(aLink);
+          div.appendChild(wrap);
+        }
+      }
+
+      const time = document.createElement('div');
+      time.className = 'muted small mt-6';
+      time.textContent = new Date(a.createdAt).toLocaleString();
+      div.appendChild(time);
+
+      list.appendChild(div);
+    }
+
+    card.hidden = false;
+  } catch (err) {
+    console.error('Error loading announcements:', err);
+  }
+}
+
+  </script>
+</body>
+</html>
