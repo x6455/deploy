@@ -318,6 +318,11 @@
                             <button id="stopAllBtn" class="btn-danger text-white px-4 py-2 rounded-lg text-sm font-medium">
                                 Stop All
                             </button>
+                            <!-- Add this button next to other instance management buttons -->
+<button id="debugInstance" class="btn-warning text-white px-4 py-2 rounded-lg text-sm font-medium">
+  Debug Instance
+</button>
+                            
                         </div>
                         <div class="relative">
                             <input type="text" id="instanceSearch" placeholder="Search instances..." 
@@ -587,7 +592,39 @@ function initializeDatabaseEditor() {
     document.getElementById('cancelModal')?.addEventListener('click', closeModal);
     document.getElementById('saveDocument')?.addEventListener('click', saveDocument);
 }
+// Add to your existing JavaScript
+document.getElementById('debugInstance')?.addEventListener('click', async function() {
+  const selectedInstance = document.getElementById('dbInstanceSelect').value;
+  if (!selectedInstance) {
+    showNotification('Please select an instance first', 'warning');
+    return;
+  }
 
+  try {
+    const serverUrl = getServerUrl();
+    const response = await fetch(`${serverUrl}/api/debug/instance/${selectedInstance}`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    if (response.ok) {
+      const debugInfo = await response.json();
+      console.log('Debug Info:', debugInfo);
+      
+      // Show debug info in a modal or alert
+      alert(`Instance Debug Info:\n\n` +
+        `Running: ${debugInfo.instance.running}\n` +
+        `Script: ${debugInfo.instance.scriptPath}\n` +
+        `Process PID: ${debugInfo.process?.pid || 'None'}\n` +
+        `Recent Logs: ${debugInfo.recentLogs.length}`);
+      
+      showNotification('Debug info loaded - check console', 'info');
+    }
+  } catch (error) {
+    showNotification('Error getting debug info: ' + error.message, 'error');
+  }
+});
 // Load database from server
 async function loadDatabase() {
     const instanceId = document.getElementById('dbInstanceSelect').value;
@@ -2308,4 +2345,5 @@ const serverUrl = getServerUrl();
         window.filterInstances = filterInstances;
     </script>
 </body>
+
 </html>
