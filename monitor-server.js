@@ -19,7 +19,130 @@ const cors = require('cors');
 
 const PORT = process.env.MONITOR_PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_here';
-const ADMIN_PASSWORD = process.env.ADMIN_PASS;
+const ADMIN_PASSWORD = process.env.ADMIN_PASS;function startBotInstance(instanceId) {
+  const instance = instances.get(instanceId);
+  if (!instance) {
+    throw new Error(`Instance ${instanceId} not found`);
+  }
+
+  // Check if script exists
+  if (!fs.existsSync(instance.scriptPath)) {
+    throw new Error(`Script not found: ${instance.scriptPath}`);
+  }
+
+  // Check if already running
+  if (instance.running && processes.has(instanceId)) {
+    throw new Error(`Instance ${instanceId} is already running`);
+  }
+
+  // Get the actual server IP for VM environment
+  const networkInterfaces = os.networkInterfaces();
+  let serverHost = 'localhost';
+  
+  // Try to find a non-internal IP address
+  Object.keys(networkInterfaces).forEach(interfaceName => {
+    networkInterfaces[interfaceName].forEach(interface => {
+      if (interface.family === 'IPv4' && !interface.internal) {
+        serverHost = interface.address;
+      }
+    });
+  });
+
+  const botProcess = spawn('node', [instance.scriptPath], {
+    cwd: path.dirname(instance.scriptPath),
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: {
+      ...process.env, // This should include Telegram bot token from .env
+      INSTANCE_ID: instanceId,
+      MONITOR_SERVER: `http://${serverHost}:${PORT}`, // Use actual IP
+      AGENT_TOKEN: AGENT_TOKEN,
+      NODE_ENV: process.env.NODE_ENV || 'production'
+    }
+  });
+
+  // Store process reference
+  processes.set(instanceId, botProcess);
+  instance.process = botProcess;
+  instance.running = true;
+
+  // Enhanced logging to see what's happening
+  logger.info(`Started instance ${instanceId} with PID: ${botProcess.pid}`);
+  logger.info(`Script path: ${instance.scriptPath}`);
+  logger.info(`Working directory: ${path.dirname(instance.scriptPath)}`);
+
+  // Handle process output with more detail
+  botProcess.stdout.on('data', (data) => {
+    const message = data.toString().trim();
+    logger.info(`[${instanceId}][STDOUT] ${message}`);
+    
+    instance.logs.push({
+      level: 'info',
+      message: message,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (instance.logs.length > 1000) {
+      instance.logs = instance.logs.slice(-500);
+    }
+    
+    io.emit('logUpdate', { 
+      id: instanceId, 
+      log: { level: 'info', message: message } 
+    });
+  });
+
+  botProcess.stderr.on('data', (data) => {
+    const message = data.toString().trim();
+    logger.error(`[${instanceId}][STDERR] ${message}`);
+    
+    instance.logs.push({
+      level: 'error',
+      message: message,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (instance.logs.length > 1000) {
+      instance.logs = instance.logs.slice(-500);
+    }
+    
+    io.emit('logUpdate', { 
+      id: instanceId, 
+      log: { level: 'error', message: message } 
+    });
+  });
+
+  // Handle process exit with more info
+  botProcess.on('exit', (code, signal) => {
+    const exitMessage = `Process exited with code ${code}` + (signal ? `, signal ${signal}` : '');
+    logger.info(`[${instanceId}] ${exitMessage}`);
+    
+    instance.running = false;
+    instance.process = null;
+    processes.delete(instanceId);
+    
+    instance.logs.push({
+      level: 'info',
+      message: exitMessage,
+      timestamp: new Date().toISOString()
+    });
+    
+    io.emit('instanceUpdate', { id: instanceId, running: false });
+  });
+
+  botProcess.on('error', (error) => {
+    logger.error(`[${instanceId}] Process error: ${error.message}`);
+    
+    instance.running = false;
+    instance.process = null;
+    processes.delete(instanceId);
+    
+    io.emit('instanceUpdate', { id: instanceId, running: false });
+  });
+
+  // Emit status update
+  io.emit('instanceUpdate', { id: instanceId, running: true });
+  return botProcess;
+}
 const ENCRYPTION_KEY = process.env.DB_ENCRYPTION_KEY;
 const AGENT_TOKEN = process.env.AGENT_TOKEN;
 const ALGORITHM = 'aes-256-cbc';
@@ -152,136 +275,131 @@ function restartBotInstance(instanceId) {
     logger.info(`Instance ${instanceId} started (was not running)`);
   }
 }
+
 function startBotInstance(instanceId) {
   const instance = instances.get(instanceId);
   if (!instance) {
     throw new Error(`Instance ${instanceId} not found`);
   }
 
-  logger.info(`🚀 STARTING BOT: ${instanceId}`);
-  logger.info(`📁 Script: ${instance.scriptPath}`);
-  logger.info(`📁 Directory: ${path.dirname(instance.scriptPath)}`);
-  logger.info(`✅ File exists: ${fs.existsSync(instance.scriptPath)}`);
-
-  // Check if we can read the file
-  try {
-    fs.accessSync(instance.scriptPath, fs.constants.R_OK);
-    logger.info(`📖 File is readable: YES`);
-  } catch (err) {
-    logger.info(`❌ File is readable: NO - ${err.message}`);
-    throw err;
+  // Check if script exists
+  if (!fs.existsSync(instance.scriptPath)) {
+    throw new Error(`Script not found: ${instance.scriptPath}`);
   }
+
+  // Check if already running
+  if (instance.running && processes.has(instanceId)) {
+    throw new Error(`Instance ${instanceId} is already running`);
+  }
+
+  // Get the actual server IP for VM environment
+  const networkInterfaces = os.networkInterfaces();
+  let serverHost = 'localhost';
+  
+  // Try to find a non-internal IP address
+  Object.keys(networkInterfaces).forEach(interfaceName => {
+    networkInterfaces[interfaceName].forEach(interface => {
+      if (interface.family === 'IPv4' && !interface.internal) {
+        serverHost = interface.address;
+      }
+    });
+  });
 
   const botProcess = spawn('node', [instance.scriptPath], {
     cwd: path.dirname(instance.scriptPath),
     stdio: ['pipe', 'pipe', 'pipe'],
     env: {
-      ...process.env,
+      ...process.env, // This should include Telegram bot token from .env
       INSTANCE_ID: instanceId,
-      MONITOR_SERVER: `http://localhost:${PORT}`,
+      MONITOR_SERVER: `http://${serverHost}:${PORT}`, // Use actual IP
       AGENT_TOKEN: AGENT_TOKEN,
-      NODE_ENV: 'production'
+      NODE_ENV: process.env.NODE_ENV || 'production'
     }
   });
-
-  logger.info(`📊 Bot process spawned for ${instanceId}, PID: ${botProcess.pid}`);
 
   // Store process reference
   processes.set(instanceId, botProcess);
   instance.process = botProcess;
   instance.running = true;
 
-  // Enhanced stdout handling
+  // Enhanced logging to see what's happening
+  logger.info(`Started instance ${instanceId} with PID: ${botProcess.pid}`);
+  logger.info(`Script path: ${instance.scriptPath}`);
+  logger.info(`Working directory: ${path.dirname(instance.scriptPath)}`);
+
+  // Handle process output with more detail
   botProcess.stdout.on('data', (data) => {
     const message = data.toString().trim();
-    logger.info(`[${instanceId} STDOUT]: ${message}`);
+    logger.info(`[${instanceId}][STDOUT] ${message}`);
     
-    // Add to instance logs
     instance.logs.push({
       level: 'info',
       message: message,
       timestamp: new Date().toISOString()
     });
     
-    // Keep logs manageable
     if (instance.logs.length > 1000) {
       instance.logs = instance.logs.slice(-500);
     }
     
-    // Emit to dashboard
     io.emit('logUpdate', { 
       id: instanceId, 
       log: { level: 'info', message: message } 
     });
   });
 
-  // Enhanced stderr handling
   botProcess.stderr.on('data', (data) => {
     const message = data.toString().trim();
-    console.error(`[${instanceId} STDERR]: ${message}`);
+    logger.error(`[${instanceId}][STDERR] ${message}`);
     
-    // Add to instance logs
     instance.logs.push({
       level: 'error',
       message: message,
       timestamp: new Date().toISOString()
     });
     
-    // Keep logs manageable
     if (instance.logs.length > 1000) {
       instance.logs = instance.logs.slice(-500);
     }
     
-    // Emit to dashboard
     io.emit('logUpdate', { 
       id: instanceId, 
       log: { level: 'error', message: message } 
     });
   });
 
-  // Handle process exit
+  // Handle process exit with more info
   botProcess.on('exit', (code, signal) => {
-    logger.info(`[${instanceId} EXIT]: Code ${code}, Signal ${signal}`);
+    const exitMessage = `Process exited with code ${code}` + (signal ? `, signal ${signal}` : '');
+    logger.info(`[${instanceId}] ${exitMessage}`);
     
     instance.running = false;
     instance.process = null;
     processes.delete(instanceId);
     
-    // Add exit log
-    const exitMessage = `Process exited with code ${code}` + (signal ? `, signal ${signal}` : '');
     instance.logs.push({
       level: 'info',
       message: exitMessage,
       timestamp: new Date().toISOString()
     });
     
-    // Emit status update
     io.emit('instanceUpdate', { id: instanceId, running: false });
-    io.emit('logUpdate', { 
-      id: instanceId, 
-      log: { level: 'error', message: `Process exited (code: ${code})` } 
-    });
   });
 
   botProcess.on('error', (error) => {
-    console.error(`[${instanceId} PROCESS ERROR]: ${error.message}`);
+    logger.error(`[${instanceId}] Process error: ${error.message}`);
     
     instance.running = false;
     instance.process = null;
     processes.delete(instanceId);
     
-    // Emit status update
     io.emit('instanceUpdate', { id: instanceId, running: false });
-    io.emit('logUpdate', { 
-      id: instanceId, 
-      log: { level: 'error', message: `Process error: ${error.message}` } 
-    });
   });
 
-  logger.info(`✅ Started instance ${instanceId}`);
+  // Emit status update
+  io.emit('instanceUpdate', { id: instanceId, running: true });
   return botProcess;
 }
-
 function stopBotInstance(instanceId) {
   const instance = instances.get(instanceId);
   if (!instance) {
@@ -473,6 +591,55 @@ app.post('/api/login', (req, res) => {
   res.json({ token });
 });
 
+
+// Debug endpoint to check instance details
+app.get('/api/debug/instance/:id', authenticateToken, (req, res) => {
+  const instance = instances.get(req.params.id);
+  if (!instance) {
+    return res.status(404).json({ error: 'Instance not found' });
+  }
+
+  const processInfo = processes.get(req.params.id);
+  
+  res.json({
+    instance: {
+      id: instance.id,
+      folder: instance.folder,
+      scriptPath: instance.scriptPath,
+      dbPath: instance.dbPath,
+      running: instance.running
+    },
+    process: processInfo ? {
+      pid: processInfo.pid,
+      spawnargs: processInfo.spawnargs,
+      env: {
+        ...processInfo.env,
+        // Hide sensitive info
+        AGENT_TOKEN: processInfo.env.AGENT_TOKEN ? '***' : undefined
+      }
+    } : null,
+    recentLogs: instance.logs.slice(-10)
+  });
+});
+
+// Endpoint to check all running processes
+app.get('/api/debug/processes', authenticateToken, (req, res) => {
+  const runningProcesses = {};
+  
+  processes.forEach((process, instanceId) => {
+    runningProcesses[instanceId] = {
+      pid: process.pid,
+      killed: process.killed,
+      exitCode: process.exitCode,
+      signalCode: process.signalCode
+    };
+  });
+  
+  res.json({
+    totalProcesses: processes.size,
+    runningProcesses: runningProcesses
+  });
+});
 // Get all instances
 app.get('/api/instances', authenticateToken, (req, res) => {
   updateBotStatuses((instancesList) => {
@@ -765,6 +932,7 @@ server.listen(PORT, '0.0.0.0', () => {
   });
 
 });
+
 
 
 
